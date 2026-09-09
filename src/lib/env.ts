@@ -111,6 +111,12 @@ export function hasAnthropicApiKey(): boolean {
   return anthropicApiKey() !== null;
 }
 
+/** Shared secret for the daily AI-insight cron trigger. Not a session credential. */
+export function cronSecret(): string | null {
+  const secret = process.env.CRON_SECRET?.trim();
+  return secret && secret.length > 0 ? secret : null;
+}
+
 /**
  * A summary of what is and is not configured, safe to send to the browser.
  * Booleans only — no secret values, no lengths, no prefixes.

@@ -24,6 +24,9 @@ export function middleware(request: NextRequest) {
     pathname === '/login' ||
     pathname.startsWith('/api/auth/') ||
     pathname.startsWith('/api/webhooks/up') ||
+    // Its own bearer-token check inside the route, same reasoning as the
+    // webhook above — a cron job has no session cookie to send.
+    pathname.startsWith('/api/cron/') ||
     // A health check that requires a login cannot do its job. It exposes
     // booleans only, never a value.
     pathname === '/api/health' ||
