@@ -671,6 +671,7 @@ export default async function SettingsPage({
                 ['Up webhook secret', status.upWebhookSecretConfigured],
                 ['Notion', status.notionConfigured],
                 ['Login password', status.authConfigured],
+                ['Claude API', status.aiConfigured],
               ].map(([label, on]) => (
                 <li key={String(label)} className="flex items-center justify-between gap-3 py-2">
                   <span className="text-sm">{String(label)}</span>

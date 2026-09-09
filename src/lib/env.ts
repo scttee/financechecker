@@ -98,6 +98,20 @@ export function appPasswordHash(): string | null {
 }
 
 /**
+ * The Claude API key. Returns null rather than throwing when absent, so the
+ * AI features can say "not configured" instead of the app crashing — same
+ * pattern as the Up token and the Notion config.
+ */
+export function anthropicApiKey(): string | null {
+  const key = process.env.ANTHROPIC_API_KEY?.trim();
+  return key && key.length > 0 ? key : null;
+}
+
+export function hasAnthropicApiKey(): boolean {
+  return anthropicApiKey() !== null;
+}
+
+/**
  * A summary of what is and is not configured, safe to send to the browser.
  * Booleans only — no secret values, no lengths, no prefixes.
  */
@@ -107,6 +121,7 @@ export interface ConfigStatus {
   upWebhookSecretConfigured: boolean;
   notionConfigured: boolean;
   authConfigured: boolean;
+  aiConfigured: boolean;
 }
 
 export function configStatus(): ConfigStatus {
@@ -116,5 +131,6 @@ export function configStatus(): ConfigStatus {
     upWebhookSecretConfigured: upWebhookSecret() !== null,
     notionConfigured: notionConfig() !== null,
     authConfigured: appPasswordHash() !== null,
+    aiConfigured: hasAnthropicApiKey(),
   };
 }

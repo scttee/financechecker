@@ -38,6 +38,7 @@ export async function GET() {
         webhook: status.upWebhookSecretConfigured,
         notion: status.notionConfigured,
         auth: status.authConfigured,
+        ai: status.aiConfigured,
       },
       time: new Date().toISOString(),
     },

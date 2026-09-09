@@ -182,6 +182,13 @@ enum WebhookStatus {
   IGNORED
 }
 
+enum AiInsightKind {
+  TODAY_HEADLINE
+  REVIEW_WEEK
+  REVIEW_MONTH
+  REVIEW_SIX_MONTHS
+}
+
 // ---------------------------------------------------------------------------
 // Settings — a single row, id = 1. Single-user app by design.
 // ---------------------------------------------------------------------------
@@ -674,4 +681,30 @@ model SyncRun {
   error String?
 
   @@index([startedAt])
+}
+
+// ---------------------------------------------------------------------------
+// AI insights — Claude-generated, on demand, never automatic.
+// ---------------------------------------------------------------------------
+
+/// One cached row per kind. Regenerated only when asked, from the same
+/// aggregated figures already shown on screen plus recent transaction
+/// descriptions — never a rival calculation, and never called on a schedule,
+/// because every generation costs real money.
+model AiInsight {
+  id String @id @default(cuid())
+
+  kind AiInsightKind @unique
+
+  /// TODAY_HEADLINE only.
+  headline String?
+  detail   String?
+
+  /// REVIEW_* only.
+  narrative String?
+
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  generatedAt  DateTime @default(now())
 }

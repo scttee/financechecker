@@ -22,6 +22,8 @@ import { setRecurringStatus } from '@/lib/services/recurringService';
 import { dismissAllReviewItems, dismissReviewItem } from '@/lib/services/reviewItems';
 import { getAllocationPercents, getSettings } from '@/lib/services/settings';
 import { syncNotionWishlist } from '@/lib/services/wishlist';
+import { AiError, regenerateReviewAiInsight, regenerateTodayAiInsight } from '@/lib/services/aiInsight';
+import type { ReviewPeriod } from '@/lib/services/review';
 import { pushSimulatedPayday } from '@/lib/up/gateway';
 import { useMockData } from '@/lib/env';
 
@@ -476,6 +478,46 @@ export async function syncNotionAction() {
   await requireSession();
   await syncNotionWishlist();
   revalidatePath('/shopping');
+}
+
+// ---------------------------------------------------------------------------
+// AI insights
+//
+// Both actions below call Claude, which costs money and can fail (no key,
+// rate limit). redirect() throws internally, so it must happen after the
+// try/catch settles — never inside it — or the redirect itself gets caught
+// and reported as a generic failure.
+// ---------------------------------------------------------------------------
+
+export async function regenerateTodayInsightAction() {
+  await requireSession();
+
+  let errorMessage: string | null = null;
+  try {
+    await regenerateTodayAiInsight();
+  } catch (error) {
+    errorMessage = error instanceof AiError ? error.userMessage : 'Could not reach Claude.';
+  }
+
+  revalidateAll();
+  if (errorMessage) redirect(`/today?aiError=${encodeURIComponent(errorMessage)}`);
+}
+
+export async function regenerateReviewInsightAction(formData: FormData) {
+  await requireSession();
+  const period = String(formData.get('period') ?? 'WEEK') as ReviewPeriod;
+
+  let errorMessage: string | null = null;
+  try {
+    await regenerateReviewAiInsight(period);
+  } catch (error) {
+    errorMessage = error instanceof AiError ? error.userMessage : 'Could not reach Claude.';
+  }
+
+  revalidatePath('/review');
+  if (errorMessage) {
+    redirect(`/review?period=${period}&aiError=${encodeURIComponent(errorMessage)}`);
+  }
 }
 
 export async function saveWishlistItemAction(formData: FormData) {

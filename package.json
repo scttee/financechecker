@@ -25,6 +25,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
     "@date-fns/tz": "^1.2.0",
     "@notionhq/client": "^2.2.15",
     "@prisma/client": "^6.2.1",

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/db';
 import { PERIOD_LABEL, getReview, type ReviewPeriod } from '@/lib/services/review';
+import { getReviewAiInsight } from '@/lib/services/aiInsight';
 import { VERDICT_LABEL, listLeakageEvents, readExplanation } from '@/lib/services/leakageService';
 import { RECURRING_STATUS_LABEL, listRecurring, monthlyCommitmentTotal } from '@/lib/services/recurringService';
 import { KIND_LABEL, SEVERITY_LABEL, listOpenReviewItems } from '@/lib/services/reviewItems';
@@ -9,6 +10,7 @@ import { roleLabel } from '@/lib/domain/roles';
 import { formatCents } from '@/lib/money';
 import { formatDate, formatDateTime } from '@/lib/time';
 import { getSettings } from '@/lib/services/settings';
+import { configStatus } from '@/lib/env';
 import {
   Button,
   Card,
@@ -24,6 +26,7 @@ import {
 import {
   dismissAllReviewItemsAction,
   dismissReviewItemAction,
+  regenerateReviewInsightAction,
   setLeakageVerdictAction,
   setRecurringStatusAction,
 } from '@/app/actions';
@@ -41,21 +44,23 @@ const SEVERITY_TONE: Record<string, PillTone> = {
 export default async function ReviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; aiError?: string }>;
 }) {
   const params = await searchParams;
   const period = (PERIODS.includes(params.period as ReviewPeriod)
     ? params.period
     : 'WEEK') as ReviewPeriod;
 
-  const [review, items, leakage, recurring, monthlyTotal, settings] = await Promise.all([
+  const [review, items, leakage, recurring, monthlyTotal, settings, aiInsight] = await Promise.all([
     getReview(period),
     listOpenReviewItems(),
     listLeakageEvents({ limit: 20 }),
     listRecurring(),
     monthlyCommitmentTotal(),
     getSettings(),
+    getReviewAiInsight(period),
   ]);
+  const status = configStatus();
 
   // Load the transactions named by leakage findings so the evidence can be
   // shown rather than just referenced.
@@ -154,6 +159,42 @@ export default async function ReviewPage({
           </div>
         </div>
       </Card>
+
+      {params.aiError ? (
+        <Notice tone="notice" title="Claude did not answer">
+          <p>{params.aiError}</p>
+        </Notice>
+      ) : null}
+
+      {/* Claude's narrative, from the same figures as the card above plus
+          the transaction descriptions behind them. Generated on request only
+          — nothing here calls the API on its own. */}
+      {status.aiConfigured || aiInsight ? (
+        <Card>
+          <CardHeader title="Claude's take" />
+          {aiInsight ? (
+            <>
+              <p className="text-sm leading-relaxed">{aiInsight.narrative}</p>
+              <p className="mt-3 text-xs text-faint">
+                Generated {formatDateTime(aiInsight.generatedAt, settings.timezone)} · {aiInsight.model} ·
+                about {aiInsight.costCents < 1 ? '<1¢' : `${Math.round(aiInsight.costCents)}¢`}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted">
+              Not generated yet for {PERIOD_LABEL[period].toLowerCase()}.
+            </p>
+          )}
+          {status.aiConfigured ? (
+            <form action={regenerateReviewInsightAction} className="mt-3">
+              <input type="hidden" name="period" value={period} />
+              <Button type="submit" variant="secondary">
+                {aiInsight ? 'Regenerate' : "Ask Claude"}
+              </Button>
+            </form>
+          ) : null}
+        </Card>
+      ) : null}
 
       {/* One thing to notice. */}
       {review.oneThing ? (

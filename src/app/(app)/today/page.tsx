@@ -1,9 +1,12 @@
 import Link from 'next/link';
 import { getTodayView } from '@/lib/services/overview';
 import { getSetupState } from '@/lib/services/settings';
+import { getTodayAiInsight } from '@/lib/services/aiInsight';
+import { configStatus } from '@/lib/env';
 import { formatCents } from '@/lib/money';
-import { formatDayShort } from '@/lib/time';
+import { formatDayShort, formatDateTime } from '@/lib/time';
 import {
+  Button,
   Card,
   CardHeader,
   Empty,
@@ -18,10 +21,16 @@ import {
 } from '@/components/ui';
 import { SafeToSpendCard } from '@/components/SafeToSpend';
 import { FinancialHealthCard } from '@/components/FinancialHealth';
+import { regenerateTodayInsightAction } from '@/app/actions';
 
 export const dynamic = 'force-dynamic';
 
-export default async function TodayPage() {
+export default async function TodayPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ aiError?: string }>;
+}) {
+  const params = await searchParams;
   const setup = await getSetupState();
 
   if (!setup.hasAccounts) {
@@ -36,8 +45,9 @@ export default async function TodayPage() {
     );
   }
 
-  const view = await getTodayView();
+  const [view, aiInsight] = await Promise.all([getTodayView(), getTodayAiInsight()]);
   const { cycle, insight, health, safeToSpend } = view;
+  const status = configStatus();
 
   const tone =
     insight.tone === 'ATTENTION' ? 'attention' : insight.tone === 'NOTICE' ? 'notice' : 'ontrack';
@@ -50,20 +60,33 @@ export default async function TodayPage() {
           score itself is one tap away. */}
       {health.status === 'READY' ? <FinancialHealthCard health={health} /> : null}
 
+      {params.aiError ? (
+        <Notice tone="notice" title="Claude did not answer">
+          <p>{params.aiError}</p>
+        </Notice>
+      ) : null}
+
       {/* The one insight. Whatever is worth saying in a full sentence today,
-          distinct from the score above it. */}
-      <Card className="border-l-[3px]" >
+          distinct from the score above it. Claude's take stands in for the
+          rule-based one once generated, from the same figures either way. */}
+      <Card className="border-l-[3px]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <Pill tone={tone}>{insight.label}</Pill>
+            {aiInsight ? (
+              <Pill tone="protected">Claude</Pill>
+            ) : (
+              <Pill tone={tone}>{insight.label}</Pill>
+            )}
             <p className="mt-2 text-lg font-medium leading-snug tracking-tight">
-              {insight.headline}
+              {aiInsight ? aiInsight.headline : insight.headline}
             </p>
-            {insight.detail ? (
+            {aiInsight ? (
+              <p className="mt-1 text-sm leading-relaxed text-muted">{aiInsight.detail}</p>
+            ) : insight.detail ? (
               <p className="mt-1 text-sm leading-relaxed text-muted">{insight.detail}</p>
             ) : null}
           </div>
-          {insight.href ? (
+          {!aiInsight && insight.href ? (
             <Link
               href={insight.href}
               className="shrink-0 text-sm font-medium text-accent hover:underline"
@@ -72,13 +95,41 @@ export default async function TodayPage() {
             </Link>
           ) : null}
         </div>
-        <Why label="Why this?">
-          <p>{insight.reason}</p>
-          <p>
-            Only one thing is shown here at a time. If everything could be surfaced, nothing would
-            be.
+
+        {aiInsight ? (
+          <p className="mt-3 text-xs text-faint">
+            Generated {formatDateTime(aiInsight.generatedAt, view.timezone)} · {aiInsight.model} · about{' '}
+            {aiInsight.costCents < 1 ? '<1¢' : `${Math.round(aiInsight.costCents)}¢`}
           </p>
+        ) : null}
+
+        <Why label={aiInsight ? 'The rule-based version' : 'Why this?'}>
+          {aiInsight ? (
+            <>
+              <p>
+                <span className="font-medium text-ink">{insight.headline}</span>
+                {insight.detail ? ` ${insight.detail}` : ''}
+              </p>
+              <p>{insight.reason}</p>
+            </>
+          ) : (
+            <>
+              <p>{insight.reason}</p>
+              <p>
+                Only one thing is shown here at a time. If everything could be surfaced, nothing
+                would be.
+              </p>
+            </>
+          )}
         </Why>
+
+        {status.aiConfigured ? (
+          <form action={regenerateTodayInsightAction} className="mt-3">
+            <Button type="submit" variant="ghost" className="!px-0">
+              {aiInsight ? 'Ask Claude again' : "Get Claude's take"}
+            </Button>
+          </form>
+        ) : null}
       </Card>
 
       {!setup.complete ? (
