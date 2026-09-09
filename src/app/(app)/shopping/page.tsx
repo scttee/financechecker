@@ -1,4 +1,5 @@
 import { getWishlistWithDecisions } from '@/lib/services/wishlist';
+import { getCurrentCycleView } from '@/lib/services/overview';
 import { getBalancesByRole, getSettings } from '@/lib/services/settings';
 import { notionConfigured } from '@/lib/notion/client';
 import { PRIORITY_LABEL, describeWait } from '@/lib/domain/buyIt';
@@ -35,13 +36,15 @@ const VERDICT_TONE: Record<string, PillTone> = {
 };
 
 export default async function ShoppingPage() {
-  const [rows, balances, settings] = await Promise.all([
+  const [rows, balances, settings, cycle] = await Promise.all([
     getWishlistWithDecisions(),
     getBalancesByRole(),
     getSettings(),
+    getCurrentCycleView(),
   ]);
 
   const gearBalance = balances.get('GEAR_OBJECTS') ?? 0;
+  const gearLine = cycle?.categories.find((c) => c.role === 'GEAR_OBJECTS') ?? null;
   const considering = rows.filter((r) => r.item.status === 'CONSIDERING');
   const elsewhere = rows.filter((r) => r.item.status !== 'CONSIDERING');
   const notion = notionConfigured();
@@ -66,6 +69,33 @@ export default async function ShoppingPage() {
         <p className="mt-1 text-sm text-muted">
           {considering.length} {considering.length === 1 ? 'item' : 'items'} under consideration.
         </p>
+
+        {gearLine ? (
+          <Why label="This differs from the Pay Cycle figure. Why?">
+            <p>
+              Two different things are being measured, and both are true.
+            </p>
+            <p>
+              <span className="font-medium text-ink">{formatCents(gearBalance)}</span> is what the
+              Gear Saver actually holds. It carries over from one fortnight to the next, which is
+              how a $500 purchase ever becomes possible on a $152 fortnightly allocation.
+            </p>
+            <p>
+              <span className="font-medium text-ink">
+                {formatCents(gearLine.spentCents)} of {formatCents(gearLine.allocatedCents)}
+              </span>{' '}
+              is what has gone through Gear in this pay cycle. Pay Cycle reads
+              {gearLine.remainingCents < 0
+                ? ` ${formatCents(Math.abs(gearLine.remainingCents))} past the allocation`
+                : ` ${formatCents(gearLine.remainingCents)} left`}
+              , which is about pace rather than about what you can afford.
+            </p>
+            <p>
+              Purchases are decided on the balance, because that is the money that exists. Pace is
+              worth knowing, but it does not make a funded purchase unaffordable.
+            </p>
+          </Why>
+        ) : null}
 
         {!notion ? (
           <Notice tone="neutral" title="Notion is not connected">
