@@ -54,11 +54,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Prisma needs the schema, the migrations and the CLI to run `migrate deploy`
-# on start.
+# on start. The CLI's own dependency tree (unlike @prisma/client) is not part
+# of Next's standalone trace, so it is installed fresh here rather than
+# copied piecemeal from the builder stage.
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma/client ./node_modules/@prisma/client
+RUN npm install --no-save --omit=dev prisma@6.19.3
 
 USER nextjs
 EXPOSE 3000
