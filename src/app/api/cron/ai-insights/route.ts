@@ -5,9 +5,10 @@
  * — not a session, so it is checked with the same constant-time comparison
  * discipline as the Up webhook signature, against CRON_SECRET rather than a
  * cookie. This is the only thing in the app that calls Claude without a
- * person pressing a button, and it is bounded to once a day on purpose: two
- * calls (Today's headline, this week's review), not a loop over every
- * period, so the cost stays predictable regardless of how the schedule fires.
+ * person pressing a button, and it is bounded to once a day on purpose:
+ * three calls (Today's headline, this week's review, the planning
+ * narrative), not a loop over every period, so the cost stays predictable
+ * regardless of how the schedule fires.
  *
  * Exempt from the session gate for the same reason the webhook and health
  * check are — a cron job has no session to send.
@@ -16,7 +17,12 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 import { cronSecret } from '@/lib/env';
-import { AiError, regenerateReviewAiInsight, regenerateTodayAiInsight } from '@/lib/services/aiInsight';
+import {
+  AiError,
+  regeneratePlanningAiInsight,
+  regenerateReviewAiInsight,
+  regenerateTodayAiInsight,
+} from '@/lib/services/aiInsight';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -55,6 +61,13 @@ export async function POST(request: Request) {
     results.reviewWeek = 'ok';
   } catch (error) {
     results.reviewWeek = error instanceof AiError ? error.userMessage : 'failed';
+  }
+
+  try {
+    await regeneratePlanningAiInsight();
+    results.planning = 'ok';
+  } catch (error) {
+    results.planning = error instanceof AiError ? error.userMessage : 'failed';
   }
 
   return NextResponse.json({ ranAt: new Date().toISOString(), results });

@@ -21,9 +21,16 @@ import { prisma } from '@/lib/db';
 import { formatCents } from '@/lib/money';
 import { roleLabel } from '@/lib/domain/roles';
 import { STATUS_LABEL } from '@/lib/domain/status';
-import { AiError, estimateCostCents, generateReviewNarrative, generateTodayHeadline } from '@/lib/ai/claude';
+import {
+  AiError,
+  estimateCostCents,
+  generatePlanningNarrative,
+  generateReviewNarrative,
+  generateTodayHeadline,
+} from '@/lib/ai/claude';
 import { getTodayView } from './overview';
 import { getReview, type ReviewPeriod } from './review';
+import { getGoalPlans } from './planning';
 
 export { AiError };
 
@@ -189,6 +196,65 @@ export async function regenerateReviewAiInsight(period: ReviewPeriod): Promise<v
     where: { kind },
     create: {
       kind,
+      narrative: result.narrative,
+      model: result.model,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+    },
+    update: {
+      narrative: result.narrative,
+      model: result.model,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      generatedAt: new Date(),
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Planning
+// ---------------------------------------------------------------------------
+
+export interface PlanningAiInsight {
+  narrative: string;
+  generatedAt: Date;
+  model: string;
+  costCents: number;
+}
+
+export async function getPlanningAiInsight(): Promise<PlanningAiInsight | null> {
+  const row = await prisma.aiInsight.findUnique({ where: { kind: 'PLANNING' } });
+  if (!row || !row.narrative) return null;
+  return {
+    narrative: row.narrative,
+    generatedAt: row.generatedAt,
+    model: row.model,
+    costCents: estimateCostCents(row),
+  };
+}
+
+export async function regeneratePlanningAiInsight(): Promise<void> {
+  const plans = await getGoalPlans();
+
+  const context = {
+    goals: plans.map((g) => ({
+      name: g.name,
+      current: formatCents(g.currentCents),
+      target: formatCents(g.targetCents),
+      reached: g.reachedAt !== null,
+      perCycle: formatCents(g.projection.perCycleCents),
+      remaining: formatCents(g.projection.remainingCents),
+      cyclesRemaining: g.projection.cyclesRemaining,
+      projectedDate: g.projection.projectedDate ? g.projection.projectedDate.toISOString().slice(0, 10) : null,
+    })),
+  };
+
+  const result = await generatePlanningNarrative(context);
+
+  await prisma.aiInsight.upsert({
+    where: { kind: 'PLANNING' },
+    create: {
+      kind: 'PLANNING',
       narrative: result.narrative,
       model: result.model,
       inputTokens: result.inputTokens,

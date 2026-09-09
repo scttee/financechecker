@@ -1,5 +1,8 @@
 import { prisma } from '@/lib/db';
 import { getBalancesByRole, getSettings } from '@/lib/services/settings';
+import { getGoalPlans } from '@/lib/services/planning';
+import { getPlanningAiInsight } from '@/lib/services/aiInsight';
+import { configStatus } from '@/lib/env';
 import { formatCents } from '@/lib/money';
 import { formatDate, toDateInputValue } from '@/lib/time';
 import {
@@ -15,12 +18,17 @@ import {
   Progress,
   Why,
 } from '@/components/ui';
-import { addAssetSnapshotAction, addExternalAssetAction } from '@/app/actions';
+import { addAssetSnapshotAction, addExternalAssetAction, regeneratePlanningInsightAction } from '@/app/actions';
 
 export const dynamic = 'force-dynamic';
 
-export default async function GoalsPage() {
-  const [settings, goals, balances, assets] = await Promise.all([
+export default async function GoalsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ aiError?: string }>;
+}) {
+  const params = await searchParams;
+  const [settings, goals, balances, assets, plans, planningInsight] = await Promise.all([
     getSettings(),
     prisma.financialGoal.findMany({ orderBy: { sortOrder: 'asc' } }),
     getBalancesByRole(),
@@ -28,7 +36,11 @@ export default async function GoalsPage() {
       orderBy: { sortOrder: 'asc' },
       include: { snapshots: { orderBy: { takenAt: 'desc' }, take: 12 } },
     }),
+    getGoalPlans(),
+    getPlanningAiInsight(),
   ]);
+  const status = configStatus();
+  const plansByKey = new Map(plans.map((p) => [p.key, p]));
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -43,10 +55,44 @@ export default async function GoalsPage() {
 
   return (
     <div className="space-y-3">
+      {params.aiError ? (
+        <Notice tone="notice" title="Claude did not answer">
+          <p>{params.aiError}</p>
+        </Notice>
+      ) : null}
+
+      {/* Planning. When each goal is funded at the plan's current rate —
+          the forward-looking question the rest of this page doesn't answer,
+          because everywhere else is deliberately about right now. */}
+      {status.aiConfigured || planningInsight ? (
+        <Card>
+          <CardHeader title="Planning" hint="When each goal is funded at the plan's current rate." />
+          {planningInsight ? (
+            <>
+              <p className="text-sm leading-relaxed">{planningInsight.narrative}</p>
+              <p className="mt-3 text-xs text-faint">
+                Generated {formatDate(planningInsight.generatedAt, settings.timezone)} · {planningInsight.model} ·
+                about {planningInsight.costCents < 1 ? '<1¢' : `${Math.round(planningInsight.costCents)}¢`}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted">Not generated yet.</p>
+          )}
+          {status.aiConfigured ? (
+            <form action={regeneratePlanningInsightAction} className="mt-3">
+              <Button type="submit" variant="secondary">
+                {planningInsight ? 'Regenerate' : 'Ask Claude'}
+              </Button>
+            </form>
+          ) : null}
+        </Card>
+      ) : null}
+
       {goals.map((goal) => {
         const balance = balances.get(goal.role) ?? 0;
         const pct = goal.targetCents > 0 ? Math.min(100, Math.round((balance / goal.targetCents) * 100)) : 0;
         const remaining = Math.max(0, goal.targetCents - balance);
+        const plan = plansByKey.get(goal.key);
 
         return (
           <Card key={goal.id}>
@@ -71,6 +117,14 @@ export default async function GoalsPage() {
                 ? `Reached ${formatDate(goal.reachedAt, settings.timezone)}. This is now a floor, not a target.`
                 : `${pct}% there. ${formatCents(remaining)} to go.`}
             </p>
+
+            {!goal.reachedAt && plan ? (
+              <p className="mt-1 text-sm text-muted">
+                {plan.projection.projectedDate
+                  ? `At the current rate (${formatCents(plan.projection.perCycleCents)} a cycle), around ${formatDate(plan.projection.projectedDate, settings.timezone)}.`
+                  : 'The current phase sends nothing here, so there is no projected date.'}
+              </p>
+            ) : null}
 
             <Why>
               {goal.key === 'emergency' ? (

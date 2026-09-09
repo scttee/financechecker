@@ -68,6 +68,18 @@ House style, followed exactly:
 Respond with exactly this JSON shape and nothing else — no markdown fences, no commentary:
 {"headline": "...", "detail": "..."}`;
 
+const PLANNING_SYSTEM_PROMPT = `You write a short forward-looking narrative for the planning section of a personal finance app called Future Scotty, for one person, about when their goals will be funded at the plan's current rate.
+
+House style, followed exactly:
+- Calm, flat, factual. Never a warning, never scolding, no exclamation marks.
+- A projection is a straight line through today's numbers at the current plan rate, not a promise or a forecast — say so if it helps, but don't hedge every sentence.
+- Never invent a number, a date, or a fact. Use only what is in the JSON below.
+- If a goal has no projected date (the current phase sends nothing to it), say that plainly rather than guessing when it might resume.
+- Two to four short sentences. Plain English, no jargon, no bullet points, no emoji, no exclamation marks.
+- Discretionary spending is never a failing, and a slow goal is never framed as a failure — it's a rate, not a verdict.
+
+Respond with the narrative text only — no headline, no JSON, no markdown.`;
+
 const REVIEW_SYSTEM_PROMPT = `You write a short narrative for the review screen of a personal finance app called Future Scotty, summarising a period of someone's own spending back to them.
 
 House style, followed exactly:
@@ -147,6 +159,18 @@ export async function generateReviewNarrative(
   context: unknown,
 ): Promise<{ narrative: string } & AiUsage> {
   const response = await callClaude(REVIEW_SYSTEM_PROMPT, JSON.stringify(context), 700);
+  return {
+    narrative: extractText(response),
+    model: response.model,
+    inputTokens: response.usage.input_tokens,
+    outputTokens: response.usage.output_tokens,
+  };
+}
+
+export async function generatePlanningNarrative(
+  context: unknown,
+): Promise<{ narrative: string } & AiUsage> {
+  const response = await callClaude(PLANNING_SYSTEM_PROMPT, JSON.stringify(context), 600);
   return {
     narrative: extractText(response),
     model: response.model,

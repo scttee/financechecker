@@ -22,7 +22,12 @@ import { setRecurringStatus } from '@/lib/services/recurringService';
 import { dismissAllReviewItems, dismissReviewItem } from '@/lib/services/reviewItems';
 import { getAllocationPercents, getSettings } from '@/lib/services/settings';
 import { syncNotionWishlist } from '@/lib/services/wishlist';
-import { AiError, regenerateReviewAiInsight, regenerateTodayAiInsight } from '@/lib/services/aiInsight';
+import {
+  AiError,
+  regeneratePlanningAiInsight,
+  regenerateReviewAiInsight,
+  regenerateTodayAiInsight,
+} from '@/lib/services/aiInsight';
 import type { ReviewPeriod } from '@/lib/services/review';
 import { pushSimulatedPayday } from '@/lib/up/gateway';
 import { useMockData } from '@/lib/env';
@@ -518,6 +523,20 @@ export async function regenerateReviewInsightAction(formData: FormData) {
   if (errorMessage) {
     redirect(`/review?period=${period}&aiError=${encodeURIComponent(errorMessage)}`);
   }
+}
+
+export async function regeneratePlanningInsightAction() {
+  await requireSession();
+
+  let errorMessage: string | null = null;
+  try {
+    await regeneratePlanningAiInsight();
+  } catch (error) {
+    errorMessage = error instanceof AiError ? error.userMessage : 'Could not reach Claude.';
+  }
+
+  revalidatePath('/goals');
+  if (errorMessage) redirect(`/goals?aiError=${encodeURIComponent(errorMessage)}`);
 }
 
 export async function saveWishlistItemAction(formData: FormData) {

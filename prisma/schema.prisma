@@ -187,6 +187,7 @@ enum AiInsightKind {
   REVIEW_WEEK
   REVIEW_MONTH
   REVIEW_SIX_MONTHS
+  PLANNING
 }
 
 // ---------------------------------------------------------------------------
