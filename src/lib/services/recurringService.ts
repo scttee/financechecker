@@ -17,11 +17,26 @@ import { detectRecurring, type RecurringCandidate } from '@/lib/domain/recurring
 import { getSettings, recurringSettingsFrom } from './settings';
 import { raiseReviewItem } from './reviewItems';
 
+/**
+ * A charge first seen longer ago than this is part of the furniture, not news.
+ * Discovering a three-year-old phone bill on first import is the import
+ * working, not a finding.
+ */
+const NEW_COST_WINDOW_DAYS = 120;
+
 export async function detectAndStoreRecurring(now: Date = new Date()): Promise<number> {
   const settings = await getSettings();
 
+  // Rent and investing are structural parts of the plan, modelled explicitly
+  // elsewhere. They are genuinely recurring, but listing them here would bury
+  // the thing this detector exists to find — the quiet commitments nobody
+  // decided to take on — under two entries that are the plan working.
   const transactions = await prisma.transaction.findMany({
-    where: { deletedAt: null, isInternalTransfer: false },
+    where: {
+      deletedAt: null,
+      isInternalTransfer: false,
+      OR: [{ role: null }, { role: { notIn: ['RENT', 'INVESTING'] } }],
+    },
     select: {
       id: true,
       description: true,
@@ -74,26 +89,25 @@ export async function detectAndStoreRecurring(now: Date = new Date()): Promise<n
         lastSeenAt: candidate.lastSeenAt,
         nextExpectedAt: candidate.nextExpectedAt,
         confidence: candidate.confidence,
-        status: 'NEW',
+        // Only something that started recently is presented as new. Anything
+        // older is simply an established cost.
+        status: isNewCost(candidate.firstSeenAt, now) ? 'NEW' : 'EXPECTED',
       },
     });
     stored += 1;
 
-    await raiseForCandidate(candidate);
+    if (isNewCost(candidate.firstSeenAt, now)) await raiseForCandidate(candidate);
   }
 
   return stored;
 }
 
-/**
- * Only genuinely new commitments get a notice, and only ones that started
- * recently. Discovering a three-year-old phone bill on first import is not
- * news, it is the import working.
- */
-async function raiseForCandidate(candidate: RecurringCandidate): Promise<void> {
-  const startedRecently = candidate.firstSeenAt.getTime() > Date.now() - 120 * 86_400_000;
-  if (!startedRecently) return;
+function isNewCost(firstSeenAt: Date, now: Date): boolean {
+  return firstSeenAt.getTime() > now.getTime() - NEW_COST_WINDOW_DAYS * 86_400_000;
+}
 
+/** Raise a quiet notice for a commitment that has only just appeared. */
+async function raiseForCandidate(candidate: RecurringCandidate): Promise<void> {
   await raiseReviewItem({
     kind: 'NEW_RECURRING_COST',
     severity: 'WORTH_NOTICING',

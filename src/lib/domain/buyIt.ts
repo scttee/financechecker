@@ -256,8 +256,8 @@ export function decideBuyIt(input: BuyItInput): BuyItDecision {
       waitRequiredHours === 0
         ? `At ${money(priceCents)} this sits in the ${tierLabel} band, which carries no waiting period.`
         : waitPassed
-          ? `The ${tierLabel} band carries a ${describeWait(waitRequiredHours)} wait. It has been ${describeWait(waitElapsedHours)} since this went on the list.`
-          : `The ${tierLabel} band carries a ${describeWait(waitRequiredHours)} wait. It has been ${describeWait(waitElapsedHours)}. A sale does not shorten this.`,
+          ? `The ${tierLabel} band waits ${describeWait(waitRequiredHours)}. It has been ${describeWait(waitElapsedHours)} since this went on the list.`
+          : `The ${tierLabel} band waits ${describeWait(waitRequiredHours)}. It has been ${describeWait(waitElapsedHours)}. A sale does not shorten this.`,
   });
 
   // --- Would something more important stop being affordable? --------------
@@ -322,7 +322,7 @@ export function decideBuyIt(input: BuyItInput): BuyItDecision {
     verdict = 'WAIT';
     headline = 'Wait';
     const remainingHours = waitRequiredHours - waitElapsedHours;
-    summary = `You can afford this. The ${describeWait(waitRequiredHours)} waiting period for something in the ${tierLabel} band has ${describeWait(remainingHours)} left to run${waitClearsAt ? `, clearing on ${formatDay(waitClearsAt)}` : ''}. If it is still worth it then, it is worth it.`;
+    summary = `You can afford this. Anything in the ${tierLabel} band waits ${describeWait(waitRequiredHours)}, and this has ${describeWait(remainingHours)} left to run${waitClearsAt ? `, clearing ${formatDay(waitClearsAt)}` : ''}. If it is still worth it then, it is worth it.`;
   } else if (blockingItem) {
     verdict = 'WAIT';
     headline = 'Wait';

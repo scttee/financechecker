@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Two themes, both warm. The dark one is a genuine design rather than an
+ * inverted light one: paper goes to a warm near-black, and the status colours
+ * lift rather than simply darkening.
+ */
+:root {
+  --paper: #faf8f5;
+  --card: #ffffff;
+  --ink: #1c1a17;
+  --muted: #6b645c;
+  --faint: #9a938a;
+  --line: #e8e3db;
+  --accent: #3f5d52;
+  --accent-soft: #eef2ef;
+  --track: #eeeae3;
+
+  --ontrack: #4a6b55;
+  --ontrack-soft: #edf3ee;
+  --notice: #8a6323;
+  --notice-soft: #f8f1e4;
+  --attention: #964a34;
+  --attention-soft: #f9eee9;
+  --protected: #4a5a68;
+  --protected-soft: #eef1f4;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #16150f;
+    --card: #1e1d16;
+    --ink: #f2efe8;
+    --muted: #a49c90;
+    --faint: #7a7267;
+    --line: #2e2c23;
+    --accent: #8fb3a3;
+    --accent-soft: #23291f;
+    --track: #2a2820;
+
+    --ontrack: #8fb99b;
+    --ontrack-soft: #1e2820;
+    --notice: #d3a75f;
+    --notice-soft: #2b2417;
+    --attention: #d1876d;
+    --attention-soft: #2c1f19;
+    --protected: #9db0c0;
+    --protected-soft: #1d232a;
+
+    color-scheme: dark;
+  }
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--paper);
+  color: var(--ink);
+  font-feature-settings: 'cv02', 'cv03', 'cv04';
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Money and dates line up in columns only if the digits are the same width. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* Visible focus, always. Removing it to look tidy makes the app unusable by
+   keyboard, which is not a trade worth making. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* The disclosure arrow is drawn by the component, not the browser. */
+summary::-webkit-details-marker {
+  display: none;
+}
+summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

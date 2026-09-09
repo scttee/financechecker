@@ -15,9 +15,9 @@ import 'server-only';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { cookies } from 'next/headers';
 import { authSecret } from '@/lib/env';
+import { SESSION_COOKIE, SESSION_TTL_SECONDS } from './cookie';
 
-export const SESSION_COOKIE = 'future_scotty_session';
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
+export { SESSION_COOKIE, SESSION_TTL_SECONDS };
 
 interface SessionPayload {
   /** Issued at, seconds since epoch. */

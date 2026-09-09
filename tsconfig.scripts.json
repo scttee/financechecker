@@ -1,0 +1,23 @@
+{
+  // Config for the CLI scripts in scripts/, run through tsx.
+  //
+  // The only difference from the app config is that `server-only` resolves to
+  // a stub. That package exists to make a build fail if a server module is
+  // pulled into a client bundle, and it does that by throwing on import. A
+  // Node script is already the server, so the guard has nothing to protect
+  // and only gets in the way.
+  //
+  // This is a separate file rather than a path added to tsconfig.json on
+  // purpose: Next.js reads tsconfig.json paths too, and adding the stub there
+  // would disable the guard across the whole application.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "paths": {
+      "@/*": ["./src/*"],
+      "server-only": ["./scripts/server-only-stub.ts"]
+    }
+  },
+  "include": ["scripts/**/*.ts", "src/**/*.ts"]
+}

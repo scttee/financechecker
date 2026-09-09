@@ -2,11 +2,9 @@
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  experimental: {
-    // Keep the Prisma client on the server. It must never be traced into a
-    // client bundle.
-    serverComponentsExternalPackages: ['@prisma/client', 'prisma'],
-  },
+  // Keep the Prisma client on the server. It must never be traced into a
+  // client bundle.
+  serverExternalPackages: ['@prisma/client', 'prisma'],
   async headers() {
     return [
       {

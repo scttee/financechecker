@@ -18,9 +18,9 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "db:seed": "tsx scripts/seed.ts",
-    "db:reset": "prisma migrate reset --force && npm run db:seed",
-    "hash-password": "tsx scripts/hash-password.ts",
+    "db:seed": "tsx --tsconfig tsconfig.scripts.json scripts/seed.ts",
+    "db:reset": "prisma migrate reset --force --skip-seed && npm run db:seed",
+    "hash-password": "tsx --tsconfig tsconfig.scripts.json scripts/hash-password.ts",
     "gen-secret": "node -e \"console.log(require('crypto').randomBytes(32).toString('base64url'))\"",
     "postinstall": "prisma generate"
   },

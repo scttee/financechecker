@@ -27,6 +27,12 @@ export type InsightTone = 'CALM' | 'NOTICE' | 'ATTENTION';
 
 export interface Insight {
   tone: InsightTone;
+  /**
+   * The status word shown beside the headline. Chosen per insight rather than
+   * derived from the tone, because "On track" sitting next to "Gear is fully
+   * spent" reads as the app contradicting itself.
+   */
+  label: string;
   headline: string;
   /** Optional second line. Kept short or omitted entirely. */
   detail: string | null;
@@ -56,6 +62,7 @@ export async function buildInsight(input: {
     candidates.push({
       score: 1000,
       tone: 'ATTENTION',
+      label: 'Needs attention',
       headline: 'Setup is not finished yet',
       detail: setup.missing[0] ?? null,
       href: '/setup',
@@ -67,6 +74,7 @@ export async function buildInsight(input: {
     candidates.push({
       score: 900,
       tone: 'NOTICE',
+      label: 'Needs attention',
       headline: 'No pay cycle yet',
       detail: 'Once a salary payment is found, the fortnight starts tracking itself.',
       href: '/settings',
@@ -80,6 +88,7 @@ export async function buildInsight(input: {
     candidates.push({
       score: 800,
       tone: 'CALM',
+      label: 'Funded',
       headline: 'Emergency target reached',
       detail: `${formatCents(emergency.balanceCents)} against a ${formatCents(emergency.targetCents)} target. The plan has moved to Phase 2.`,
       href: '/goals',
@@ -92,6 +101,7 @@ export async function buildInsight(input: {
     candidates.push({
       score: 700,
       tone: 'NOTICE',
+      label: 'Wait',
       headline: 'Pay has not landed yet',
       detail: `The fortnight was due to turn over on ${shortDate(cycle.endAt)}. Nothing has been counted as salary since.`,
       href: '/pay-cycle',
@@ -110,6 +120,7 @@ export async function buildInsight(input: {
       candidates.push({
         score: attention === 'NEEDS_ATTENTION' ? 620 : 500,
         tone: attention === 'NEEDS_ATTENTION' ? 'NOTICE' : 'CALM',
+        label: 'Running hot',
         headline: `${hot.label} is running ahead of the pay cycle`,
         detail: `${hot.spentPct}% used against ${hot.elapsedPct}% of the fortnight gone. ${formatCents(hot.remainingCents)} left.`,
         href: '/pay-cycle',
@@ -125,11 +136,12 @@ export async function buildInsight(input: {
       candidates.push({
         score: 560,
         tone: 'CALM',
+        label: 'Worth noticing',
         headline: `${spent.label} is fully spent this fortnight`,
         detail:
           spent.remainingCents < 0
-            ? `${formatCents(Math.abs(spent.remainingCents))} past the allocation, with ${cycle.progress.daysRemaining} days to payday.`
-            : `Nothing left until payday in ${cycle.progress.daysRemaining} days.`,
+            ? `${formatCents(Math.abs(spent.remainingCents))} past the allocation, with ${days(cycle.progress.daysRemaining)} to payday.`
+            : `Nothing left until payday in ${days(cycle.progress.daysRemaining)}.`,
         href: '/pay-cycle',
         reason: `${spent.label} has no allocation left and there is still time to run in the cycle.`,
       });
@@ -143,6 +155,7 @@ export async function buildInsight(input: {
       candidates.push({
         score: 600,
         tone: 'NOTICE',
+        label: 'Worth noticing',
         headline:
           unreviewed === 1
             ? 'One movement out of a purpose-built Saver is worth a look'
@@ -159,8 +172,9 @@ export async function buildInsight(input: {
     candidates.push({
       score: 550,
       tone: 'NOTICE',
+      label: 'Wait',
       headline: 'Nothing spare until payday',
-      detail: `${cycle.progress.daysRemaining} days to go. The essentials are still funded — this is about discretionary spending only.`,
+      detail: `${days(cycle.progress.daysRemaining)} to go. The essentials are still funded, so this is about discretionary spending only.`,
       href: '/today#safe-to-spend',
       reason: 'The discretionary buckets are committed for the rest of this cycle.',
     });
@@ -171,8 +185,9 @@ export async function buildInsight(input: {
     candidates.push({
       score: 100,
       tone: 'CALM',
+      label: 'On track',
       headline: "You're on track",
-      detail: `${formatCents(safeToSpend.safeToSpendCents)} of discretionary money over ${cycle.progress.daysRemaining} days, and nothing is running ahead of itself.`,
+      detail: `${formatCents(safeToSpend.safeToSpendCents)} of discretionary money over ${days(cycle.progress.daysRemaining)}, and nothing is running ahead of itself.`,
       href: null,
       reason: 'Nothing else scored higher, which is the point: on an ordinary day this screen should be boring.',
     });
@@ -181,6 +196,7 @@ export async function buildInsight(input: {
   candidates.push({
     score: 0,
     tone: 'CALM',
+    label: 'On track',
     headline: 'Nothing to report',
     detail: null,
     href: null,
@@ -190,6 +206,12 @@ export async function buildInsight(input: {
   const winner = candidates.sort((a, b) => b.score - a.score)[0]!;
   const { score: _score, ...insight } = winner;
   return insight;
+}
+
+/** "1 day" rather than "1 days". Small, and the sort of thing that makes an
+ *  app feel written rather than generated. */
+function days(count: number): string {
+  return `${count} ${count === 1 ? 'day' : 'days'}`;
 }
 
 function shortDate(date: Date): string {

@@ -20,6 +20,13 @@ export interface AllocationRow {
   role: AccountRole;
   basisPoints: number;
   allocatedCents: Cents;
+  /**
+   * True for money taken off the top before the percentages are applied.
+   * Rent is the only one. It matters because an off-the-top row is fully
+   * allocated by definition: spending it is the plan working, not a shortfall
+   * that has to come out of everyday money.
+   */
+  isOffTheTop: boolean;
 }
 
 export interface PaydayAllocation {
@@ -92,9 +99,22 @@ export function calculatePaydayAllocation(input: {
     role: p.role,
     basisPoints: p.basisPoints,
     allocatedCents: byRole.get(p.role as string) ?? 0,
+    isOffTheTop: false,
   }));
 
   const totalAllocatedCents = rows.reduce((acc, r) => acc + r.allocatedCents, 0);
+
+  // Rent is allocated in full, off the top, before any percentage applies.
+  // Recording it as a row with a real allocation is what stops the rent
+  // payment reading as a shortfall that everyday spending has to absorb.
+  if (rentCents > 0 && !rows.some((r) => r.role === 'RENT')) {
+    rows.unshift({
+      role: 'RENT',
+      basisPoints: 0,
+      allocatedCents: rentCents,
+      isOffTheTop: true,
+    });
+  }
   const unallocatedCents = byRole.get(UNALLOCATED) ?? 0;
 
   return {
@@ -125,6 +145,7 @@ export interface AuditRow {
   role: AccountRole;
   label: string;
   basisPoints: number;
+  isOffTheTop: boolean;
   expectedCents: Cents;
   observedCents: Cents;
   /** observed minus expected. Negative means less went in than the plan says. */
@@ -165,7 +186,7 @@ export function auditPayday(input: {
 
   const untrackedRoles: AccountRole[] = [];
   const rows: AuditRow[] = allocation.rows
-    .filter((r) => r.basisPoints > 0)
+    .filter((r) => r.basisPoints > 0 || r.isOffTheTop)
     .map((r) => {
       const label = roleLabel(r.role);
       const tracked = trackedRoles.has(r.role);
@@ -178,6 +199,7 @@ export function auditPayday(input: {
           role: r.role,
           label,
           basisPoints: r.basisPoints,
+          isOffTheTop: r.isOffTheTop,
           expectedCents: r.allocatedCents,
           observedCents: 0,
           differenceCents: 0,
@@ -207,6 +229,7 @@ export function auditPayday(input: {
         role: r.role,
         label,
         basisPoints: r.basisPoints,
+        isOffTheTop: r.isOffTheTop,
         expectedCents: r.allocatedCents,
         observedCents,
         differenceCents,

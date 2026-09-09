@@ -100,7 +100,7 @@ interface MerchantSpec {
 }
 
 const MERCHANTS: readonly MerchantSpec[] = [
-  { name: 'Woolworths Metro', minCents: 2_400, maxCents: 9_800, account: 'mock-acct-groceries', category: 'groceries', parentCategory: 'good-life', perCycle: 4 },
+  { name: 'Woolworths Metro', minCents: 2_400, maxCents: 8_200, account: 'mock-acct-groceries', category: 'groceries', parentCategory: 'good-life', perCycle: 3 },
   { name: 'Coles Express', minCents: 1_200, maxCents: 5_400, account: 'mock-acct-groceries', category: 'groceries', parentCategory: 'good-life', perCycle: 2 },
   { name: 'Harris Farm Markets', minCents: 3_100, maxCents: 7_600, account: 'mock-acct-groceries', category: 'groceries', parentCategory: 'good-life', perCycle: 1 },
   { name: 'Single O Surry Hills', minCents: 480, maxCents: 1_150, account: 'mock-acct-dining', category: 'restaurants-and-cafes', parentCategory: 'good-life', perCycle: 5 },
@@ -134,8 +134,15 @@ const SUBSCRIPTIONS: readonly SubscriptionSpec[] = [
   { name: 'Amaysim Mobile', cents: 3_500, intervalDays: 30, account: 'mock-acct-bills', category: 'mobile-phone', parentCategory: 'home', offset: 22 },
   { name: 'Aussie Broadband', cents: 9_500, intervalDays: 30, account: 'mock-acct-bills', category: 'internet', parentCategory: 'home', offset: 8 },
   { name: 'Fitness First Surry Hills', cents: 2_990, intervalDays: 14, account: 'mock-acct-health', category: 'fitness-and-wellbeing', parentCategory: 'personal', offset: 5 },
+  { name: 'Origin Energy', cents: 48_000, intervalDays: 91, account: 'mock-acct-bills', category: 'utilities', parentCategory: 'home', offset: 14 },
+  { name: 'Sydney Water', cents: 27_000, intervalDays: 91, account: 'mock-acct-bills', category: 'utilities', parentCategory: 'home', offset: 46 },
   // Introduced recently, so it should surface as a possible new recurring cost.
   { name: 'Strava Subscription', cents: 1_499, intervalDays: 30, account: 'mock-acct-fun', category: 'fitness-and-wellbeing', parentCategory: 'personal', offset: 6, startsDaysAgo: 95 },
+];
+
+/** One-off annual bills, dated relative to now. */
+const ANNUAL_BILLS: ReadonlyArray<{ name: string; cents: number; daysAgo: number; category: string; parentCategory: string }> = [
+  { name: 'NRMA Home & Contents', cents: 64_000, daysAgo: 118, category: 'life-admin', parentCategory: 'home' },
 ];
 
 /** Fortnightly therapy. Real, regular, and never something to flag. */
@@ -465,11 +472,30 @@ export function generateMockData(options: MockOptions = {}): MockDataset {
     }
   }
 
+  for (const bill of ANNUAL_BILLS) {
+    pushTransaction(ctx, {
+      accountId: 'mock-acct-bills',
+      amountCents: -bill.cents,
+      description: bill.name,
+      at: atTime(new Date(now.getTime() - bill.daysAgo * DAY_MS), 9, 0, rng),
+      category: bill.category,
+      parentCategory: bill.parentCategory,
+      transactionType: 'Direct Debit',
+    });
+  }
+
   // --- Occasional gear purchases, funded properly -------------------------
   const gearHistory: Array<[number, string, number]> = [
+    [168, 'Macpac', 38_000],
+    [151, 'Bogong Equipment', 26_000],
     [128, 'Paddy Pallin', 8_900],
+    [119, 'Mountain Designs', 19_000],
     [96, 'MAAP', 14_500],
+    [78, 'Anaconda', 9_500],
     [61, 'Wild Earth', 6_400],
+    [44, 'Sea to Summit', 14_000],
+    [27, 'Paddy Pallin', 22_000],
+    [16, 'MAAP', 10_700],
   ];
   for (const [daysAgo, name, cents] of gearHistory) {
     pushTransaction(ctx, {
