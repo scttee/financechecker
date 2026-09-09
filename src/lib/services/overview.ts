@@ -12,6 +12,7 @@ import type { AccountRole, Phase } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { calculateSafeToSpend, type SafeToSpendResult, type UpcomingCommitment } from '@/lib/domain/safeToSpend';
 import { categoryStatus, type CategoryLine } from '@/lib/domain/status';
+import { computeFinancialHealth, type FinancialHealth, type InsufficientHealth } from '@/lib/domain/health';
 import { budgetedRoles, roleDefinition } from '@/lib/domain/roles';
 import { cycleProgress, spendingDaysRemaining, type CycleProgress, type DerivedPayCycle } from '@/lib/domain/payCycle';
 import { expectedBefore } from '@/lib/domain/recurring';
@@ -165,6 +166,7 @@ export interface TodayView {
   investedThisCycleCents: number;
   safeToSpend: SafeToSpendResult | null;
   insight: Insight;
+  health: FinancialHealth | InsufficientHealth;
   leakageThisMonth: { cents: number; count: number };
   openReviewCount: number;
   phase: Phase;
@@ -174,17 +176,19 @@ export interface TodayView {
 
 export async function getTodayView(now: Date = new Date()): Promise<TodayView> {
   const settings = await getSettings();
-  const [cycle, balances, goalRows, liquid, openReviewCount, lastSync] = await Promise.all([
-    getCurrentCycleView(now),
-    getBalancesByRole(),
-    prisma.financialGoal.findMany({ orderBy: { sortOrder: 'asc' } }),
-    getLiquidBalance(),
-    prisma.reviewItem.count({ where: { dismissedAt: null } }),
-    prisma.syncRun.findFirst({
-      where: { status: { in: ['SUCCEEDED', 'PARTIAL'] } },
-      orderBy: { startedAt: 'desc' },
-    }),
-  ]);
+  const [cycle, balances, goalRows, liquid, openReviewCount, unreviewedLeakageCount, lastSync] =
+    await Promise.all([
+      getCurrentCycleView(now),
+      getBalancesByRole(),
+      prisma.financialGoal.findMany({ orderBy: { sortOrder: 'asc' } }),
+      getLiquidBalance(),
+      prisma.reviewItem.count({ where: { dismissedAt: null } }),
+      prisma.leakageEvent.count({ where: { verdict: 'UNREVIEWED' } }),
+      prisma.syncRun.findFirst({
+        where: { status: { in: ['SUCCEEDED', 'PARTIAL'] } },
+        orderBy: { startedAt: 'desc' },
+      }),
+    ]);
 
   const goals: GoalView[] = goalRows.map((g) => {
     const balanceCents = balances.get(g.role) ?? 0;
@@ -231,6 +235,23 @@ export async function getTodayView(now: Date = new Date()): Promise<TodayView> {
 
   const insight = await buildInsight({ cycle, safeToSpend, goals, leakageThisMonth, now });
 
+  const health: FinancialHealth | InsufficientHealth =
+    cycle && safeToSpend
+      ? computeFinancialHealth({
+          categories: cycle.categories,
+          safeToSpend,
+          emergencyProgressPct: goals.find((g) => g.key === 'emergency')?.progressPct ?? 0,
+          unreviewedLeakageCount,
+          cycleOverdue: cycle.progress.isOverdue,
+        })
+      : {
+          status: 'INSUFFICIENT_DATA',
+          headline: 'Not enough to score yet',
+          detail: cycle
+            ? 'Once a pay cycle is fully worked out, a score starts appearing here.'
+            : 'Once a salary payment is found, a score starts appearing here.',
+        };
+
   return {
     cycle,
     goals,
@@ -241,6 +262,7 @@ export async function getTodayView(now: Date = new Date()): Promise<TodayView> {
     investedThisCycleCents: cycle?.investedCents ?? 0,
     safeToSpend,
     insight,
+    health,
     leakageThisMonth,
     openReviewCount,
     phase: settings.phase,

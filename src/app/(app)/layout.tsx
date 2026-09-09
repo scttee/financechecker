@@ -32,7 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-dvh">
-      <header className="border-b border-line bg-card/80 backdrop-blur">
+      <header className="border-b border-line bg-card/80 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="mx-auto flex max-w-wide flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold tracking-tight">Future Scotty</span>

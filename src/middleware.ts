@@ -29,6 +29,10 @@ export function middleware(request: NextRequest) {
     pathname === '/api/health' ||
     pathname.startsWith('/_next/') ||
     pathname === '/favicon.ico' ||
+    pathname === '/favicon-32.png' ||
+    pathname === '/apple-touch-icon.png' ||
+    pathname === '/icon-192.png' ||
+    pathname === '/icon-512.png' ||
     pathname === '/manifest.webmanifest';
 
   if (isPublic) return NextResponse.next();

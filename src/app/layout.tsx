@@ -16,6 +16,18 @@ export const metadata: Metadata = {
   description: 'A calm financial cockpit.',
   // This app holds banking data. It should never be indexed by anything.
   robots: { index: false, follow: false, nocache: true },
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: [{ url: '/favicon-32.png', sizes: '32x32', type: 'image/png' }],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
+  // Lets "Add to Home Screen" open as its own standalone app rather than a
+  // Safari tab with chrome around it.
+  appleWebApp: {
+    capable: true,
+    title: 'Future Scotty',
+    statusBarStyle: 'black-translucent',
+  },
 };
 
 export const viewport: Viewport = {
@@ -24,6 +36,10 @@ export const viewport: Viewport = {
   // Zoom stays available. Locking it out to make an app feel native makes it
   // unusable for anyone who needs to make the text bigger.
   maximumScale: 5,
+  // The content itself still respects the safe area (see the bottom nav's
+  // env(safe-area-inset-bottom)); this just lets the background paint behind
+  // the notch/home indicator instead of leaving a white/black bar there.
+  viewportFit: 'cover',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#f5f5f7' },
     { media: '(prefers-color-scheme: dark)', color: '#000000' },

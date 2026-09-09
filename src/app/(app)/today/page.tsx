@@ -17,6 +17,7 @@ import {
   Why,
 } from '@/components/ui';
 import { SafeToSpendCard } from '@/components/SafeToSpend';
+import { FinancialHealthCard } from '@/components/FinancialHealth';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,15 +37,21 @@ export default async function TodayPage() {
   }
 
   const view = await getTodayView();
-  const { cycle, insight, safeToSpend } = view;
+  const { cycle, insight, health, safeToSpend } = view;
 
   const tone =
     insight.tone === 'ATTENTION' ? 'attention' : insight.tone === 'NOTICE' ? 'notice' : 'ontrack';
 
   return (
     <div className="space-y-3">
-      {/* The one insight. Top of the screen, because it is the answer to
-          "am I okay?" and everything below it is the working. */}
+      {/* The score. One number standing in for the five that answer "am I
+          okay, and should I be spending right now" — everything below it is
+          the same numbers shown individually, and the working behind the
+          score itself is one tap away. */}
+      {health.status === 'READY' ? <FinancialHealthCard health={health} /> : null}
+
+      {/* The one insight. Whatever is worth saying in a full sentence today,
+          distinct from the score above it. */}
       <Card className="border-l-[3px]" >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
