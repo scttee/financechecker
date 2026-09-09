@@ -1,0 +1,677 @@
+// Future Scotty — data model
+//
+// Design notes:
+//  * All money is stored as INTEGER CENTS. There is no floating point money
+//    anywhere in this schema or in the code that reads it.
+//  * Up resources (accounts, transactions) keep their Up id as the primary
+//    key. That is what makes synchronisation idempotent: a re-sync or a
+//    duplicate webhook delivery upserts the same row.
+//  * We store a normalised projection of Up data, not raw payloads. No card
+//    numbers beyond the last-four Up already exposes, no customer records,
+//    no attachments.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/// Stable internal identity for a money bucket. Up account display names are
+/// user-editable and unreliable, so we never key behaviour off them.
+enum AccountRole {
+  SPENDING
+  RENT
+  BILLS
+  HEALTH_THERAPY
+  GROCERIES
+  DINING_SOCIAL
+  FUN
+  TRANSPORT
+  TRAVEL
+  GEAR_OBJECTS
+  EMERGENCY
+  FUTURE_OPTIONS
+  BUFFER
+  INVESTING
+  OTHER
+}
+
+enum Phase {
+  PHASE_1
+  PHASE_2
+}
+
+enum SalaryCadence {
+  WEEKLY
+  FORTNIGHTLY
+  MONTHLY
+}
+
+enum MatchType {
+  CONTAINS
+  EXACT
+  REGEX
+}
+
+enum TxStatus {
+  HELD
+  SETTLED
+}
+
+/// How a transaction acquired its budget role. Used for explainability.
+enum RoleSource {
+  UNRESOLVED
+  ACCOUNT
+  MERCHANT_RULE
+  UP_CATEGORY
+  TAG
+  MANUAL
+}
+
+enum TagSource {
+  UP
+  LOCAL
+  SUGGESTED
+}
+
+enum AutoTagMode {
+  DRY_RUN
+  APPLY_LOCAL
+  APPLY_TO_UP
+}
+
+enum WishlistSource {
+  NOTION
+  LOCAL
+}
+
+enum WishlistStatus {
+  CONSIDERING
+  ORDERED
+  BOUGHT
+  DECLINED
+  PARKED
+}
+
+/// Ordered from most to least urgent. Lower ordinal wins in the "higher
+/// priority outstanding" rule.
+enum Priority {
+  SAFETY_REPLACEMENT
+  REPLACEMENT
+  NEED
+  USEFUL_UPGRADE
+  WANT
+  FUTURE_DECISION
+}
+
+enum Verdict {
+  BUY
+  WAIT
+  NOT_FUNDED
+  NEEDS_INFORMATION
+}
+
+enum RecurringFrequency {
+  WEEKLY
+  FORTNIGHTLY
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+enum RecurringStatus {
+  NEW
+  EXPECTED
+  CANCELLED
+  NOT_RECURRING
+  REVIEW
+}
+
+enum LeakageVerdict {
+  UNREVIEWED
+  EXPECTED
+  LEGITIMATE_EXCEPTION
+  NOT_RELATED
+  CONFIRMED
+}
+
+enum ReviewItemKind {
+  EMERGENCY_TRANSFER_OUT
+  FUTURE_OPTIONS_TRANSFER_OUT
+  POSSIBLE_LEAKAGE
+  NEW_RECURRING_COST
+  CATEGORY_RUNNING_HOT
+  EMERGENCY_TARGET_REACHED
+  PHASE_CHANGED
+  WISHLIST_ITEM_FUNDED
+  SYNC_PROBLEM
+  SETUP_INCOMPLETE
+}
+
+enum ReviewItemSeverity {
+  INFO
+  WORTH_NOTICING
+  NEEDS_ATTENTION
+}
+
+enum SyncKind {
+  MANUAL
+  HISTORICAL_IMPORT
+  WEBHOOK
+  SCHEDULED
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+}
+
+enum WebhookStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+// ---------------------------------------------------------------------------
+// Settings — a single row, id = 1. Single-user app by design.
+// ---------------------------------------------------------------------------
+
+model Settings {
+  id Int @id @default(1)
+
+  timezone String @default("Australia/Sydney")
+  currency String @default("AUD")
+
+  // --- The financial system ---
+  rentCents                Int @default(134000) // $1,340 per fortnight
+  emergencyTargetCents     Int @default(1200000) // $12,000
+  futureOptionsTargetCents Int @default(1000000) // $10,000
+
+  // Seeded from a typical payslip but never used in place of a real detected
+  // salary. Only a fallback for projections when no salary has been seen yet.
+  typicalSalaryCents Int           @default(438031)
+  salaryCadence      SalaryCadence @default(FORTNIGHTLY)
+  /// A credit must be at least this large to be considered salary.
+  salaryMinCents     Int           @default(200000)
+
+  // --- Category status thresholds (percentage points) ---
+  /// spend% exceeds elapsed% by more than this => RUNNING HOT
+  runningHotDeltaPct    Int @default(15)
+  /// remaining below this share of allocation => NEAR LIMIT
+  nearLimitRemainingPct Int @default(15)
+  /// Essentials get a wider tolerance before being called out.
+  essentialLeewayPct    Int @default(10)
+
+  // --- Leakage detection ---
+  leakageWindowMinutes Int @default(180)
+  /// Spend within this percentage of the transfer counts as correlated.
+  leakageTolerancePct  Int @default(30)
+  /// Ignore transfers smaller than this.
+  leakageMinCents      Int @default(5000)
+
+  // --- Purchase waiting periods (upper bound of tier, in cents) ---
+  waitTier1MaxCents Int @default(5000) // under $50
+  waitTier2MaxCents Int @default(20000) // $50 – $200
+  waitTier3MaxCents Int @default(50000) // $200 – $500
+  waitTier1Hours    Int @default(0)
+  waitTier2Hours    Int @default(72)
+  waitTier3Hours    Int @default(336) // 14 days
+  waitTier4Hours    Int @default(720) // 30 days
+
+  // --- Recurring detection ---
+  recurringMinOccurrences Int @default(3)
+  recurringMinConfidence  Int @default(60)
+
+  // --- Behaviour ---
+  autoTagMode            AutoTagMode @default(DRY_RUN)
+  historicalImportMonths Int         @default(6)
+
+  // --- Derived plan state ---
+  phase             Phase     @default(PHASE_1)
+  phaseChangedAt    DateTime?
+  emergencyReachedAt DateTime?
+
+  // --- Setup progress ---
+  setupCompletedAt DateTime?
+  notionLastSyncAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Allocation model
+// ---------------------------------------------------------------------------
+
+/// Payday percentages, held in BASIS POINTS so "adds to exactly 100%" is an
+/// exact integer check (sum == 10000) rather than a float comparison.
+model AllocationPercent {
+  id          String      @id @default(cuid())
+  phase       Phase
+  role        AccountRole
+  basisPoints Int
+
+  @@unique([phase, role])
+  @@index([phase])
+}
+
+/// Rules that identify a salary credit. Editable — nothing is hard-coded.
+model SalaryRule {
+  id        String    @id @default(cuid())
+  label     String
+  pattern   String
+  matchType MatchType @default(CONTAINS)
+  minCents  Int?
+  priority  Int       @default(0)
+  enabled   Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  @@index([enabled, priority])
+}
+
+// ---------------------------------------------------------------------------
+// Up accounts
+// ---------------------------------------------------------------------------
+
+model Account {
+  /// The Up account id.
+  id            String   @id
+  displayName   String
+  accountType   String // SAVER | TRANSACTIONAL | HOME_LOAN
+  ownershipType String
+  balanceCents  Int
+  openedAt      DateTime
+  lastSyncedAt  DateTime @default(now())
+
+  mapping      AccountRoleMapping?
+  transactions Transaction[]       @relation("TransactionAccount")
+  transfersIn  Transaction[]       @relation("TransactionTransferAccount")
+}
+
+/// Kept separate from Account so that re-syncing accounts from Up can never
+/// clobber the mapping I configured.
+model AccountRoleMapping {
+  accountId   String      @id
+  account     Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  role        AccountRole
+  /// My name for this bucket, if I want it to differ from the Up name.
+  displayName String?
+  /// Protected balances never count toward safe-to-spend and any transfer out
+  /// raises a review item.
+  isProtected Boolean     @default(false)
+  /// Counts toward safe discretionary spending.
+  isDiscretionary Boolean @default(false)
+  sortOrder   Int         @default(0)
+  updatedAt   DateTime    @updatedAt
+
+  @@index([role])
+}
+
+// ---------------------------------------------------------------------------
+// Transactions
+// ---------------------------------------------------------------------------
+
+model Transaction {
+  /// The Up transaction id. Primary key, so upserts are idempotent and a
+  /// HELD -> SETTLED transition updates in place instead of duplicating.
+  id     String   @id
+  status TxStatus
+
+  accountId String
+  account   Account @relation("TransactionAccount", fields: [accountId], references: [id], onDelete: Cascade)
+
+  description String
+  rawText     String?
+  message     String?
+
+  /// Negative for money out, positive for money in. Always cents.
+  amountCents Int
+  /// The amount while HELD, if the transaction was ever held.
+  heldAmountCents    Int?
+  foreignAmountCents Int?
+  foreignCurrency    String?
+  roundUpCents       Int?
+  cashbackCents      Int?
+
+  isCategorizable    Boolean @default(true)
+  transactionType    String?
+  cardSuffix         String?
+  upCategoryId       String?
+  upParentCategoryId String?
+
+  /// Set when Up reports a transferAccount relationship. This is how internal
+  /// movement between my own Savers is identified.
+  transferAccountId  String?
+  transferAccount    Account? @relation("TransactionTransferAccount", fields: [transferAccountId], references: [id], onDelete: SetNull)
+  isInternalTransfer Boolean  @default(false)
+
+  createdAt DateTime
+  settledAt DateTime?
+  /// Set on TRANSACTION_DELETED. We soft-delete so history stays explainable.
+  deletedAt DateTime?
+
+  payCycleId String?
+  payCycle   PayCycle? @relation(fields: [payCycleId], references: [id], onDelete: SetNull)
+
+  /// The budget bucket this transaction is counted against.
+  role       AccountRole?
+  roleSource RoleSource   @default(UNRESOLVED)
+
+  isSalary    Boolean @default(false)
+  needsReview Boolean @default(false)
+
+  firstSeenAt DateTime @default(now())
+  syncedAt    DateTime @updatedAt
+
+  tags TransactionTag[]
+
+  @@index([createdAt])
+  @@index([accountId, createdAt])
+  @@index([payCycleId])
+  @@index([role])
+  @@index([isInternalTransfer, createdAt])
+  @@index([isSalary, createdAt])
+  @@index([deletedAt])
+}
+
+model TransactionTag {
+  id            String      @id @default(cuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  tag           String
+  source        TagSource   @default(UP)
+  /// Set when a suggested tag has been pushed to Up.
+  appliedToUpAt DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@unique([transactionId, tag])
+  @@index([tag])
+}
+
+/// Editable merchant -> role/tag rules. Seeded with suggestions, never
+/// hard-coded in source.
+model MerchantRule {
+  id        String       @id @default(cuid())
+  pattern   String
+  matchType MatchType    @default(CONTAINS)
+  role      AccountRole?
+  tag       String?
+  priority  Int          @default(0)
+  enabled   Boolean      @default(true)
+  /// True for rules the app seeded, so the UI can mark them as suggestions.
+  isSeed    Boolean      @default(false)
+  note      String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([enabled, priority])
+}
+
+// ---------------------------------------------------------------------------
+// Pay cycles
+// ---------------------------------------------------------------------------
+
+model PayCycle {
+  id String @id @default(cuid())
+
+  /// Inclusive start — the moment the salary landed.
+  startAt DateTime
+  /// Exclusive end — the next payday, actual once known, otherwise projected.
+  endAt   DateTime
+  /// False while endAt is a projection rather than an observed payday.
+  endIsProjected Boolean @default(true)
+
+  salaryTransactionId String? @unique
+  incomeCents         Int
+  rentCents           Int
+  allocatableCents    Int
+  phase               Phase
+
+  closedAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  allocations  BudgetAllocation[]
+  transactions Transaction[]
+
+  @@index([startAt])
+}
+
+model BudgetAllocation {
+  id         String      @id @default(cuid())
+  payCycleId String
+  payCycle   PayCycle    @relation(fields: [payCycleId], references: [id], onDelete: Cascade)
+  role       AccountRole
+  basisPoints Int
+  /// Exact cents, distributed by largest remainder so the parts sum to the
+  /// allocatable total with no rounding drift.
+  allocatedCents Int
+
+  @@unique([payCycleId, role])
+}
+
+// ---------------------------------------------------------------------------
+// Goals and external assets
+// ---------------------------------------------------------------------------
+
+model FinancialGoal {
+  id          String      @id @default(cuid())
+  key         String      @unique
+  name        String
+  role        AccountRole
+  targetCents Int
+  sortOrder   Int         @default(0)
+  /// Once reached, a hard floor: the balance should not go back down.
+  isHardFloor Boolean     @default(false)
+  reachedAt   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+/// Manual snapshots of things Up cannot see — super, Betashares, etc.
+/// The app never pretends to know live market values.
+model ExternalAsset {
+  id        String                  @id @default(cuid())
+  key       String                  @unique
+  name      String
+  provider  String?
+  note      String?
+  sortOrder Int                     @default(0)
+  snapshots ExternalAssetSnapshot[]
+  createdAt DateTime                @default(now())
+}
+
+model ExternalAssetSnapshot {
+  id           String        @id @default(cuid())
+  assetId      String
+  asset        ExternalAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  balanceCents Int
+  takenAt      DateTime
+  note         String?
+  createdAt    DateTime      @default(now())
+
+  @@unique([assetId, takenAt])
+  @@index([assetId, takenAt])
+}
+
+// ---------------------------------------------------------------------------
+// Shopping
+// ---------------------------------------------------------------------------
+
+model WishlistItem {
+  id String @id @default(cuid())
+
+  source     WishlistSource @default(LOCAL)
+  /// Notion block/page id when sourced from Notion. Makes sync idempotent.
+  externalId String?        @unique
+
+  name       String
+  priceCents Int?
+  /// Free text captured from Notion when the price could not be parsed.
+  rawPrice   String?
+  priority   Priority       @default(WANT)
+  status     WishlistStatus @default(CONSIDERING)
+  /// Which Saver must fund this. Gear by default.
+  role       AccountRole    @default(GEAR_OBJECTS)
+  notes      String?
+  url        String?
+
+  /// When this entered consideration. The waiting period counts from here.
+  addedAt      DateTime  @default(now())
+  lastSyncedAt DateTime?
+  archived     Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  decisions PurchaseDecision[]
+
+  @@index([archived, status])
+}
+
+/// A snapshot of a decision so I can see what the answer was and why, at the
+/// time it was given.
+model PurchaseDecision {
+  id             String       @id @default(cuid())
+  wishlistItemId String
+  wishlistItem   WishlistItem @relation(fields: [wishlistItemId], references: [id], onDelete: Cascade)
+
+  verdict           Verdict
+  saverBalanceCents Int
+  priceCents        Int?
+  /// The ordered list of checks and their outcomes. Rendered as the "Why?".
+  checks            Json
+  decidedAt         DateTime @default(now())
+
+  @@index([wishlistItemId, decidedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Detection engines
+// ---------------------------------------------------------------------------
+
+model RecurringMerchant {
+  id String @id @default(cuid())
+
+  /// Normalised merchant key used for grouping.
+  merchantKey String @unique
+  displayName String
+
+  frequency           RecurringFrequency
+  intervalDays        Int
+  typicalAmountCents  Int
+  monthlyEquivalentCents Int
+  occurrences         Int
+  firstSeenAt         DateTime
+  lastSeenAt          DateTime
+  nextExpectedAt      DateTime?
+  /// 0-100. How regular the interval and amount are.
+  confidence          Int
+
+  status         RecurringStatus @default(NEW)
+  acknowledgedAt DateTime?
+  updatedAt      DateTime        @updatedAt
+
+  @@index([status])
+}
+
+model LeakageEvent {
+  id String @id @default(cuid())
+
+  /// The internal transfer that started it.
+  transferTransactionId String   @unique
+  transferAt            DateTime
+  transferCents         Int
+  sourceRole            AccountRole
+  destRole              AccountRole?
+
+  /// Ids of the correlated spending transactions.
+  spendTransactionIds String[]
+  spendCents          Int
+  spendRole           AccountRole?
+  minutesBetween      Int
+  /// 0-100.
+  confidence          Int
+  /// Ordered, human-readable reasoning. Rendered as the "Why?".
+  explanation         Json
+
+  verdict    LeakageVerdict @default(UNREVIEWED)
+  reviewedAt DateTime?
+  detectedAt DateTime       @default(now())
+
+  @@index([verdict, transferAt])
+  @@index([transferAt])
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+model ReviewItem {
+  id String @id @default(cuid())
+
+  kind     ReviewItemKind
+  severity ReviewItemSeverity @default(WORTH_NOTICING)
+  title    String
+  body     String?
+  data     Json?
+
+  /// Stable key so the same situation never produces two notifications.
+  dedupeKey String @unique
+
+  createdAt   DateTime  @default(now())
+  dismissedAt DateTime?
+  resolvedAt  DateTime?
+
+  @@index([dismissedAt, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Integration bookkeeping
+// ---------------------------------------------------------------------------
+
+/// Every webhook event id we have ever seen. Presence of a row means the
+/// event has been accepted; re-delivery is a no-op.
+model WebhookEvent {
+  /// The Up webhook-event id. Constant across delivery retries.
+  id            String        @id
+  eventType     String
+  transactionId String?
+  receivedAt    DateTime      @default(now())
+  processedAt   DateTime?
+  status        WebhookStatus @default(RECEIVED)
+  error         String?
+
+  @@index([receivedAt])
+  @@index([status])
+}
+
+model SyncRun {
+  id     String     @id @default(cuid())
+  kind   SyncKind
+  status SyncStatus @default(RUNNING)
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  accountsSynced         Int @default(0)
+  transactionsSeen       Int @default(0)
+  transactionsCreated    Int @default(0)
+  transactionsUpdated    Int @default(0)
+  pagesFetched           Int @default(0)
+
+  since String?
+  error String?
+
+  @@index([startedAt])
+}
