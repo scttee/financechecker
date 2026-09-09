@@ -195,7 +195,15 @@ describe('payday allocation', () => {
       percentages: toBasisPointRows(PHASE_1_DEFAULTS),
     });
     expect(result.allocatableCents).toBe(0);
-    expect(result.rows.every((r) => r.allocatedCents === 0)).toBe(true);
+    // Rent takes what there is and no more. Allocating the full $1,340 out of
+    // a $1,000 pay would put a figure on screen that no account contains.
+    const rent = result.rows.find((r) => r.role === 'RENT');
+    expect(rent?.allocatedCents).toBe(100_000);
+    expect(rent?.isOffTheTop).toBe(true);
+    // Every percentage-driven bucket gets nothing, because nothing is left.
+    expect(result.rows.filter((r) => !r.isOffTheTop).every((r) => r.allocatedCents === 0)).toBe(
+      true,
+    );
     expect(result.warnings.length).toBeGreaterThan(0);
   });
 
@@ -243,6 +251,7 @@ describe('payday audit', () => {
   });
 
   const tracked = new Set<AccountRole>([
+    'RENT',
     'BILLS',
     'HEALTH_THERAPY',
     'GROCERIES',
@@ -259,16 +268,29 @@ describe('payday audit', () => {
 
   it('calls a split that matches the plan a match', () => {
     const observed = allocation.rows
-      .filter((r) => r.basisPoints > 0)
+      .filter((r) => r.basisPoints > 0 || r.isOffTheTop)
       .map((r) => ({ role: r.role, observedCents: r.allocatedCents }));
 
     const audit = auditPayday({ allocation, observed, trackedRoles: tracked });
     expect(audit.rows.every((r) => r.status === 'MATCHED')).toBe(true);
   });
 
+  it('audits rent as an off-the-top row rather than a percentage', () => {
+    const audit = auditPayday({
+      allocation,
+      observed: [{ role: 'RENT', observedCents: RENT }],
+      trackedRoles: tracked,
+    });
+    const rent = audit.rows.find((r) => r.role === 'RENT');
+    expect(rent?.isOffTheTop).toBe(true);
+    expect(rent?.basisPoints).toBe(0);
+    expect(rent?.expectedCents).toBe(RENT);
+    expect(rent?.status).toBe('MATCHED');
+  });
+
   it('notices a split that did not happen', () => {
     const observed = allocation.rows
-      .filter((r) => r.basisPoints > 0 && r.role !== 'GEAR_OBJECTS')
+      .filter((r) => (r.basisPoints > 0 || r.isOffTheTop) && r.role !== 'GEAR_OBJECTS')
       .map((r) => ({ role: r.role, observedCents: r.allocatedCents }));
 
     const audit = auditPayday({ allocation, observed, trackedRoles: tracked });
@@ -279,7 +301,7 @@ describe('payday audit', () => {
 
   it('tolerates the few dollars Up Pay Splitting rounds by', () => {
     const observed = allocation.rows
-      .filter((r) => r.basisPoints > 0)
+      .filter((r) => r.basisPoints > 0 || r.isOffTheTop)
       .map((r) => ({ role: r.role, observedCents: r.allocatedCents + 200 }));
 
     const audit = auditPayday({ allocation, observed, trackedRoles: tracked });

@@ -107,11 +107,15 @@ export function calculatePaydayAllocation(input: {
   // Rent is allocated in full, off the top, before any percentage applies.
   // Recording it as a row with a real allocation is what stops the rent
   // payment reading as a shortfall that everyday spending has to absorb.
+  //
+  // It is capped at the income: when rent is larger than the pay, the plan
+  // cannot allocate money that did not arrive, and saying otherwise would put
+  // a figure on screen that no account contains.
   if (rentCents > 0 && !rows.some((r) => r.role === 'RENT')) {
     rows.unshift({
       role: 'RENT',
       basisPoints: 0,
-      allocatedCents: rentCents,
+      allocatedCents: Math.min(rentCents, Math.max(0, incomeCents)),
       isOffTheTop: true,
     });
   }

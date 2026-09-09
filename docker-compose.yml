@@ -1,0 +1,50 @@
+# Local development.
+#
+#   docker compose up -d db     # Postgres only, run the app with npm run dev
+#   docker compose up           # everything, app on http://localhost:3000
+#
+# The app service reads .env. Postgres is bound to localhost only, so the
+# database is not reachable from anywhere else on the network.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: future-scotty-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: future_scotty
+      POSTGRES_PASSWORD: future_scotty
+      POSTGRES_DB: future_scotty
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - future-scotty-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U future_scotty -d future_scotty']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: future-scotty-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Override the host: inside the compose network the database is `db`.
+      DATABASE_URL: postgresql://future_scotty:future_scotty@db:5432/future_scotty?schema=public
+      NODE_ENV: production
+    ports:
+      - '127.0.0.1:3000:3000'
+    # Migrations run at start so a fresh container converges on the right
+    # schema without a separate step to remember.
+    command: sh -c "npx prisma migrate deploy && node server.js"
+
+volumes:
+  future-scotty-db:

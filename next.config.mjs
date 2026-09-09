@@ -2,6 +2,10 @@
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Produces .next/standalone: a self-contained server with only the modules
+  // actually reached, which is what the Dockerfile copies into the runtime
+  // image.
+  output: 'standalone',
   // Keep the Prisma client on the server. It must never be traced into a
   // client bundle.
   serverExternalPackages: ['@prisma/client', 'prisma'],

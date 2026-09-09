@@ -24,6 +24,9 @@ export function middleware(request: NextRequest) {
     pathname === '/login' ||
     pathname.startsWith('/api/auth/') ||
     pathname.startsWith('/api/webhooks/up') ||
+    // A health check that requires a login cannot do its job. It exposes
+    // booleans only, never a value.
+    pathname === '/api/health' ||
     pathname.startsWith('/_next/') ||
     pathname === '/favicon.ico' ||
     pathname === '/manifest.webmanifest';
