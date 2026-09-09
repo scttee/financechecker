@@ -4,10 +4,9 @@
 
 /*
  * Two themes, both monochrome-first with one sharp accent. Black, white, and
- * a single racing red — the accent is a brand colour, not a status colour,
- * so it never appears on a number that means "spent" or "over." That job
- * still belongs to amber and burnt orange, same as before: a coffee is still
- * not an emergency, red is just no longer the word for that.
+ * a single purple — the accent is a brand colour, not a status colour, so it
+ * never appears on a number that means "spent" or "over." That job still
+ * belongs to amber and burnt orange: a coffee is still not an emergency.
  */
 :root {
   --paper: #f5f5f7;
@@ -16,8 +15,8 @@
   --muted: #6e6e73;
   --faint: #86868b;
   --line: #d2d2d7;
-  --accent: #e1121f;
-  --accent-soft: #fdeceb;
+  --accent: #8b3fd6;
+  --accent-soft: #f4ecfb;
   --track: #e8e8ed;
 
   --ontrack: #2f8f4e;
@@ -40,8 +39,8 @@
     --muted: #98989d;
     --faint: #6e6e73;
     --line: #38383a;
-    --accent: #ff453a;
-    --accent-soft: #3a1210;
+    --accent: #bf5af2;
+    --accent-soft: #2c1a38;
     --track: #2c2c2e;
 
     --ontrack: #32d74b;

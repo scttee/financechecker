@@ -1,10 +1,10 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * Monochrome base, one racing-red accent. Status colours stay out of red's
- * way on purpose — amber and burnt orange, not red, still carry "running hot"
- * and "spent" — because a coffee is not an emergency and the brand colour
- * should never look like a warning.
+ * Monochrome base, one purple accent. Status colours stay off it on purpose
+ * — amber and burnt orange still carry "running hot" and "spent" — because a
+ * coffee is not an emergency and the brand colour should never double as a
+ * warning.
  */
 const config: Config = {
   content: ['./src/**/*.{ts,tsx}'],
