@@ -65,7 +65,7 @@ export function CardHeader({
 export function PageTitle({ children, sub }: { children: ReactNode; sub?: ReactNode }) {
   return (
     <header className="mb-5">
-      <h1 className="text-2xl font-semibold tracking-tight">{children}</h1>
+      <h1 className="text-2xl font-bold tracking-tight">{children}</h1>
       {sub ? <p className="mt-1 text-sm text-muted">{sub}</p> : null}
     </header>
   );
@@ -337,7 +337,7 @@ const BUTTON_BASE =
   'inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50';
 
 export const buttonStyles = {
-  primary: cn(BUTTON_BASE, 'bg-accent text-white hover:opacity-90 dark:text-[#16150f]'),
+  primary: cn(BUTTON_BASE, 'bg-accent text-white hover:opacity-90'),
   secondary: cn(BUTTON_BASE, 'border border-line bg-card text-ink hover:bg-track'),
   ghost: cn(BUTTON_BASE, 'text-muted hover:bg-track hover:text-ink'),
   quiet: cn(

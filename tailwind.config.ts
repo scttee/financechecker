@@ -1,9 +1,10 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * The palette is warm neutral rather than the blue-grey every banking app
- * reaches for. Status colours are muted on purpose: there is no bright red in
- * this application, because a coffee is not an emergency.
+ * Monochrome base, one racing-red accent. Status colours stay out of red's
+ * way on purpose — amber and burnt orange, not red, still carry "running hot"
+ * and "spent" — because a coffee is not an emergency and the brand colour
+ * should never look like a warning.
  */
 const config: Config = {
   content: ['./src/**/*.{ts,tsx}'],
@@ -30,11 +31,11 @@ const config: Config = {
       },
       fontFamily: {
         sans: [
-          'ui-sans-serif',
+          'var(--font-inter)',
           '-apple-system',
           'BlinkMacSystemFont',
+          'ui-sans-serif',
           'Segoe UI',
-          'Inter',
           'Helvetica Neue',
           'Arial',
           'sans-serif',
@@ -42,8 +43,8 @@ const config: Config = {
       },
       fontSize: {
         // A dedicated scale for the headline figures on Today.
-        figure: ['2.5rem', { lineHeight: '1.05', letterSpacing: '-0.03em', fontWeight: '600' }],
-        'figure-sm': ['1.75rem', { lineHeight: '1.1', letterSpacing: '-0.02em', fontWeight: '600' }],
+        figure: ['2.5rem', { lineHeight: '1.05', letterSpacing: '-0.035em', fontWeight: '700' }],
+        'figure-sm': ['1.75rem', { lineHeight: '1.1', letterSpacing: '-0.025em', fontWeight: '700' }],
       },
       borderRadius: {
         card: '14px',
@@ -53,7 +54,7 @@ const config: Config = {
         wide: '52rem',
       },
       boxShadow: {
-        card: '0 1px 2px rgba(28, 26, 23, 0.04), 0 1px 1px rgba(28, 26, 23, 0.03)',
+        card: '0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 1px rgba(0, 0, 0, 0.04)',
       },
     },
   },

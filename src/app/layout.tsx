@@ -1,5 +1,15 @@
 import type { Metadata, Viewport } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
+
+// Inter carries the whole system rather than falling back to whatever the
+// device happens to ship, so the app looks the same, deliberately chosen
+// typeface everywhere rather than "mostly SF Pro on Apple hardware."
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Future Scotty',
@@ -15,14 +25,14 @@ export const viewport: Viewport = {
   // unusable for anyone who needs to make the text bigger.
   maximumScale: 5,
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#faf8f5' },
-    { media: '(prefers-color-scheme: dark)', color: '#16150f' },
+    { media: '(prefers-color-scheme: light)', color: '#f5f5f7' },
+    { media: '(prefers-color-scheme: dark)', color: '#000000' },
   ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en-AU">
+    <html lang="en-AU" className={inter.variable}>
       <body className="min-h-dvh antialiased">{children}</body>
     </html>
   );
