@@ -41,6 +41,7 @@ import {
   getSettings,
 } from './settings';
 import { detectAndStoreLeakage } from './leakageService';
+import { recoverStalledWebhookEvents } from './webhookProcessor';
 import { detectAndStoreRecurring } from './recurringService';
 import { raiseReviewItem } from './reviewItems';
 
@@ -178,6 +179,13 @@ export async function runSync(options: SyncOptions = {}): Promise<SyncResult> {
 
       await syncTags(normalised);
     }
+
+    // --- Pick up any webhook event that was accepted but never finished ---
+    //
+    // The webhook route answers Up immediately and processes afterwards. On a
+    // serverless host that background work can be cut off, so a sync is the
+    // backstop that gets those events over the line.
+    await recoverStalledWebhookEvents();
 
     // --- Everything derived ----------------------------------------------
     await classifyTransactions();
@@ -409,7 +417,15 @@ export async function rebuildPayCycles(now: Date = new Date()): Promise<number> 
     orderBy: { createdAt: 'asc' },
   });
 
-  if (salaries.length === 0) return 0;
+  // No salary means no cycles. Returning early here would leave every cycle
+  // built from a payment that is no longer considered salary sitting in the
+  // database, and the dashboard would keep showing safe-to-spend and
+  // allocations derived from it. Correcting a salary rule has to be able to
+  // take those figures away, not just stop adding to them.
+  if (salaries.length === 0) {
+    await discardCyclesExcept([]);
+    return 0;
+  }
 
   const derived = derivePayCycles(
     salaries.map((s) => ({
@@ -434,6 +450,8 @@ export async function rebuildPayCycles(now: Date = new Date()): Promise<number> 
     ['PHASE_1', await getAllocationPercents('PHASE_1')],
     ['PHASE_2', await getAllocationPercents('PHASE_2')],
   ]);
+
+  const keptCycleIds: string[] = [];
 
   for (const cycle of derived) {
     // A historical cycle keeps the phase that applied at the time. Only the
@@ -492,6 +510,8 @@ export async function rebuildPayCycles(now: Date = new Date()): Promise<number> 
       });
     }
 
+    keptCycleIds.push(record.id);
+
     await prisma.transaction.updateMany({
       where: { createdAt: { gte: cycle.startAt, lt: cycle.endAt } },
       data: { payCycleId: record.id },
@@ -508,7 +528,41 @@ export async function rebuildPayCycles(now: Date = new Date()): Promise<number> 
     });
   }
 
+  // Drop cycles that are no longer derived from the current salary rules.
+  await discardCyclesExcept(keptCycleIds);
+
   return derived.length;
+}
+
+/**
+ * Delete every pay cycle except the ones just rebuilt.
+ *
+ * A cycle exists only as a consequence of a salary transaction. When a rule is
+ * edited or deleted and a payment stops counting as salary, its cycle has to
+ * go with it — otherwise `getCurrentCycleView` keeps selecting a stale latest
+ * cycle and the dashboard reports allocations against a payday that, by the
+ * current rules, never happened.
+ *
+ * The transactions themselves are untouched. Only the link is cleared, by the
+ * `SetNull` on the relation.
+ */
+async function discardCyclesExcept(keptCycleIds: readonly string[]): Promise<number> {
+  const stale = await prisma.payCycle.findMany({
+    where: keptCycleIds.length > 0 ? { id: { notIn: [...keptCycleIds] } } : {},
+    select: { id: true },
+  });
+  if (stale.length === 0) return 0;
+
+  const staleIds = stale.map((c) => c.id);
+
+  await prisma.transaction.updateMany({
+    where: { payCycleId: { in: staleIds } },
+    data: { payCycleId: null },
+  });
+  // BudgetAllocation rows cascade with the cycle.
+  await prisma.payCycle.deleteMany({ where: { id: { in: staleIds } } });
+
+  return staleIds.length;
 }
 
 async function roleBalance(role: AccountRole): Promise<number> {

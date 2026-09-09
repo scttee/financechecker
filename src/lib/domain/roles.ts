@@ -272,3 +272,22 @@ export const NEVER_RAID_ROLES: readonly AccountRole[] = [
  * the money was spent on afterwards.
  */
 export const ALWAYS_REVIEW_TRANSFER_OUT: readonly AccountRole[] = ['EMERGENCY', 'FUTURE_OPTIONS'];
+
+/**
+ * Does an account's balance count toward the ceiling on safe-to-spend?
+ *
+ * This fails CLOSED. An account with no mapping does not count, because the
+ * app cannot tell an unmapped Emergency Saver from an unmapped everyday one,
+ * and guessing wrong here inflates the most prominent number on the dashboard.
+ * Money the app cannot classify is not money it will tell you to spend.
+ */
+export function countsAsLiquid(
+  mapping: { role: AccountRole; isProtected: boolean } | null | undefined,
+): boolean {
+  if (!mapping) return false;
+  if (mapping.isProtected) return false;
+  // Travel is not protected in the defensive sense, but it is not everyday
+  // money either, so it does not raise the ceiling.
+  if (mapping.role === 'TRAVEL') return false;
+  return true;
+}

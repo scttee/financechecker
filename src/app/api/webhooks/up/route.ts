@@ -64,41 +64,83 @@ export async function POST(request: Request) {
   const eventType = event.attributes.eventType;
   const transactionId = event.relationships?.transaction?.data?.id ?? null;
 
-  // 4. Idempotency. The event id is constant across delivery retries, so a
-  // repeat is acknowledged and dropped rather than processed twice.
-  const existing = await prisma.webhookEvent.findUnique({ where: { id: event.id } });
-  if (existing) {
+  // 4. Idempotency, but only for events we actually finished.
+  //
+  // An event we recorded and then failed to process is NOT a duplicate to be
+  // waved through: doing that would turn Up's retry — the one mechanism that
+  // could recover it — into a no-op. Only a settled outcome short-circuits.
+  let existing: { status: string } | null;
+  try {
+    existing = await prisma.webhookEvent.findUnique({
+      where: { id: event.id },
+      select: { status: true },
+    });
+  } catch (error) {
+    // If we cannot even read the ledger we cannot say whether this event is
+    // new, so we must not claim success. 503 keeps Up's retry alive.
+    console.error('[up-webhook] could not read event ledger', error);
+    return NextResponse.json({ error: 'Storage unavailable' }, { status: 503 });
+  }
+
+  if (existing && (existing.status === 'PROCESSED' || existing.status === 'IGNORED')) {
     return NextResponse.json({ ok: true, duplicate: true }, { status: 200 });
   }
 
-  try {
-    await prisma.webhookEvent.create({
-      data: {
-        id: event.id,
-        eventType,
-        transactionId,
-        status: eventType === 'PING' ? 'PROCESSED' : 'RECEIVED',
-        processedAt: eventType === 'PING' ? new Date() : null,
-      },
-    });
-  } catch {
-    // A unique-constraint failure means two deliveries raced. The other one
-    // has it; this one is done.
-    return NextResponse.json({ ok: true, duplicate: true }, { status: 200 });
+  if (!existing) {
+    try {
+      await prisma.webhookEvent.create({
+        data: {
+          id: event.id,
+          eventType,
+          transactionId,
+          status: eventType === 'PING' ? 'PROCESSED' : 'RECEIVED',
+          processedAt: eventType === 'PING' ? new Date() : null,
+        },
+      });
+    } catch (error) {
+      // Only a unique-constraint violation means two deliveries raced and the
+      // other one has it. Every other failure — the database being
+      // unreachable, a schema problem — must return non-2xx, or Up records the
+      // delivery as successful and never retries an event we did not store.
+      if (isUniqueViolation(error)) {
+        return NextResponse.json({ ok: true, duplicate: true }, { status: 200 });
+      }
+      console.error('[up-webhook] could not record event', error);
+      return NextResponse.json({ error: 'Could not record event' }, { status: 503 });
+    }
   }
 
   if (eventType === 'PING') {
     return NextResponse.json({ ok: true, pong: true }, { status: 200 });
   }
 
-  // Kick off the work without awaiting it. Up gets its 200 immediately, and a
-  // failure in processing is recorded against the event row rather than
-  // causing a retry storm of events we have already accepted.
+  // Kick off the work without awaiting it, so Up gets its 200 well inside the
+  // 30-second timeout it documents.
+  //
+  // On a long-lived server this promise simply runs. On a serverless platform
+  // the instance may be frozen the moment the response is sent, leaving the
+  // row in RECEIVED. That is survivable rather than silent: the check above
+  // lets Up's own retry pick it up, and `recoverStalledWebhookEvents` sweeps
+  // anything still outstanding on the next sync. Neither path loses the event.
   void processWebhookEvent({ eventId: event.id, eventType, transactionId }).catch((error) => {
     console.error('[up-webhook] processing failed', error);
   });
 
   return NextResponse.json({ ok: true }, { status: 200 });
+}
+
+/**
+ * Prisma's unique-constraint code. Checked structurally rather than with
+ * `instanceof`, so this holds across Prisma client versions and does not drag
+ * the error classes into the bundle.
+ */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'P2002'
+  );
 }
 
 /**

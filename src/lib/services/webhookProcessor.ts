@@ -131,3 +131,55 @@ async function markProcessed(
     data: { status, processedAt: new Date(), error: error?.slice(0, 1000) ?? null },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Recovery
+// ---------------------------------------------------------------------------
+
+/** How long an accepted event may sit unprocessed before it is picked back up. */
+const STALLED_AFTER_MINUTES = 10;
+
+/**
+ * Re-process events that were accepted but never finished.
+ *
+ * The webhook route answers Up immediately and processes afterwards, which is
+ * what Up asks for. On a long-lived server that background work simply runs.
+ * On a serverless platform the instance can be frozen the moment the response
+ * is sent, leaving a row stuck in RECEIVED with nothing to resume it.
+ *
+ * This is that something. It runs on every sync, so an event that fell in a
+ * hole is picked up by the next sync at the latest, and the data converges
+ * either way. FAILED rows are retried too: the usual cause is Up being briefly
+ * unreachable, which is exactly the kind of thing that fixes itself.
+ *
+ * Processing is idempotent — it upserts on the Up transaction id — so
+ * re-running one that did in fact complete costs nothing.
+ */
+export async function recoverStalledWebhookEvents(now: Date = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - STALLED_AFTER_MINUTES * 60_000);
+
+  const stalled = await prisma.webhookEvent.findMany({
+    where: {
+      status: { in: ['RECEIVED', 'FAILED'] },
+      receivedAt: { lt: cutoff },
+      // A delete event carries no transaction to re-fetch once handled, and a
+      // PING has nothing to do. Both settle on the first pass.
+      eventType: { not: 'PING' },
+    },
+    orderBy: { receivedAt: 'asc' },
+    // Bounded so one bad night cannot turn a sync into an hour of retries.
+    take: 50,
+  });
+
+  let recovered = 0;
+  for (const event of stalled) {
+    await processWebhookEvent({
+      eventId: event.id,
+      eventType: event.eventType as WebhookJob['eventType'],
+      transactionId: event.transactionId,
+    });
+    recovered += 1;
+  }
+
+  return recovered;
+}

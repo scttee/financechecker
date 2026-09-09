@@ -15,6 +15,7 @@ import type { AccountRole, Phase, Settings } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { PHASE_1_DEFAULTS, PHASE_2_DEFAULTS, toBasisPointRows } from '@/lib/domain/phases';
 import { SEED_MERCHANT_RULES } from '@/lib/domain/merchantRules';
+import { countsAsLiquid } from '@/lib/domain/roles';
 import { DEFAULT_THRESHOLDS, type StatusThresholds } from '@/lib/domain/status';
 import type { LeakageSettings } from '@/lib/domain/leakage';
 import type { WaitTiers } from '@/lib/domain/buyIt';
@@ -232,6 +233,12 @@ export interface MappedAccount {
   role: AccountRole | null;
   isProtected: boolean;
   isDiscretionary: boolean;
+  /**
+   * Whether a mapping row exists at all. Without this the UI cannot tell an
+   * account saved as "not protected" from one never mapped, and would show a
+   * role default over the top of a value the database does not hold.
+   */
+  hasMapping: boolean;
 }
 
 export async function getMappedAccounts(): Promise<MappedAccount[]> {
@@ -248,6 +255,7 @@ export async function getMappedAccounts(): Promise<MappedAccount[]> {
     role: a.mapping?.role ?? null,
     isProtected: a.mapping?.isProtected ?? false,
     isDiscretionary: a.mapping?.isDiscretionary ?? false,
+    hasMapping: a.mapping !== null,
   }));
 }
 
@@ -273,11 +281,19 @@ export async function getRoleBalance(role: AccountRole): Promise<number> {
   return (await getBalancesByRole()).get(role) ?? 0;
 }
 
-/** Total across accounts that are not protected. The safe-to-spend ceiling. */
+/**
+ * Total across accounts that are not protected. The safe-to-spend ceiling.
+ *
+ * An account with no mapping is EXCLUDED. Optional chaining would quietly
+ * include it — `!undefined` is true — so an Emergency Saver that has not been
+ * mapped yet would raise the ceiling on the most prominent number in the app.
+ * An unknown account fails closed: money the app cannot classify is not money
+ * it will tell you to spend.
+ */
 export async function getLiquidBalance(): Promise<number> {
   const accounts = await prisma.account.findMany({ include: { mapping: true } });
   return accounts
-    .filter((a) => !a.mapping?.isProtected && a.mapping?.role !== 'TRAVEL')
+    .filter((a) => countsAsLiquid(a.mapping))
     .reduce((acc, a) => acc + a.balanceCents, 0);
 }
 

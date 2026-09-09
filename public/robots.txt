@@ -1,0 +1,4 @@
+# Future Scotty holds banking data and is for one person.
+# Nothing here should ever be crawled, indexed or archived.
+User-agent: *
+Disallow: /

@@ -167,12 +167,25 @@ export default async function SetupPage() {
                       ))}
                     </Select>
 
+                    {/*
+                      Once a mapping exists, show what the database actually
+                      holds. Falling back to the role default here would tick a
+                      box the database has as false, so the screen would claim
+                      an account is protected while safe-to-spend counted its
+                      balance as available. The default only fills in for an
+                      account that has never been mapped, where it is a
+                      suggestion rather than a contradiction.
+                    */}
                     <label className="flex items-center gap-1.5 text-sm text-muted">
                       <input
                         type="checkbox"
                         name={`protected:${account.accountId}`}
                         defaultChecked={
-                          account.role ? account.isProtected || defaultIsProtected(account.role) : false
+                          account.hasMapping
+                            ? account.isProtected
+                            : account.role
+                              ? defaultIsProtected(account.role)
+                              : false
                         }
                       />
                       Protected
@@ -183,9 +196,11 @@ export default async function SetupPage() {
                         type="checkbox"
                         name={`discretionary:${account.accountId}`}
                         defaultChecked={
-                          account.role
-                            ? account.isDiscretionary || defaultIsDiscretionary(account.role)
-                            : false
+                          account.hasMapping
+                            ? account.isDiscretionary
+                            : account.role
+                              ? defaultIsDiscretionary(account.role)
+                              : false
                         }
                       />
                       Everyday spending
