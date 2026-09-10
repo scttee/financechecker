@@ -176,19 +176,17 @@ export interface TodayView {
 
 export async function getTodayView(now: Date = new Date()): Promise<TodayView> {
   const settings = await getSettings();
-  const [cycle, balances, goalRows, liquid, openReviewCount, unreviewedLeakageCount, lastSync] =
-    await Promise.all([
-      getCurrentCycleView(now),
-      getBalancesByRole(),
-      prisma.financialGoal.findMany({ orderBy: { sortOrder: 'asc' } }),
-      getLiquidBalance(),
-      prisma.reviewItem.count({ where: { dismissedAt: null } }),
-      prisma.leakageEvent.count({ where: { verdict: 'UNREVIEWED' } }),
-      prisma.syncRun.findFirst({
-        where: { status: { in: ['SUCCEEDED', 'PARTIAL'] } },
-        orderBy: { startedAt: 'desc' },
-      }),
-    ]);
+  const [cycle, balances, goalRows, liquid, openReviewCount, lastSync] = await Promise.all([
+    getCurrentCycleView(now),
+    getBalancesByRole(),
+    prisma.financialGoal.findMany({ orderBy: { sortOrder: 'asc' } }),
+    getLiquidBalance(),
+    prisma.reviewItem.count({ where: { dismissedAt: null } }),
+    prisma.syncRun.findFirst({
+      where: { status: { in: ['SUCCEEDED', 'PARTIAL'] } },
+      orderBy: { startedAt: 'desc' },
+    }),
+  ]);
 
   const goals: GoalView[] = goalRows.map((g) => {
     const balanceCents = balances.get(g.role) ?? 0;
@@ -241,8 +239,7 @@ export async function getTodayView(now: Date = new Date()): Promise<TodayView> {
           categories: cycle.categories,
           safeToSpend,
           emergencyProgressPct: goals.find((g) => g.key === 'emergency')?.progressPct ?? 0,
-          unreviewedLeakageCount,
-          cycleOverdue: cycle.progress.isOverdue,
+          futureOptionsProgressPct: goals.find((g) => g.key === 'future_options')?.progressPct ?? 0,
         })
       : {
           status: 'INSUFFICIENT_DATA',

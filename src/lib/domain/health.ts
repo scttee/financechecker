@@ -1,10 +1,25 @@
 /**
  * Financial health.
  *
- * Five existing signals — pace, spending room, Emergency coverage,
- * attentiveness to leakage, and how current the pay cycle is — rolled into
- * one number, the way a health app rolls sleep, movement and heart signals
- * into a single score instead of asking you to read five graphs.
+ * Four signals — pace, spending room, Emergency coverage, Future Options
+ * coverage — rolled into one number, the way a health app rolls sleep,
+ * movement and heart signals into a single score instead of asking you to
+ * read four graphs.
+ *
+ * Every factor here is a genuine "more is better" measure — a percentage
+ * that means real progress, the way a ring is supposed to work. Two earlier
+ * factors, leakage attentiveness and pay-cycle currency, got cut for the
+ * opposite reason: both are closer to a flag than a scale — either
+ * something needs a look or it doesn't, either the cycle is current or it
+ * isn't — and forcing a binary into a 0-100 ring read as arbitrary rather
+ * than informative. Both signals are still fully visible: leakage has its
+ * own card and its own line in the single insight, and an overdue cycle is
+ * the single insight's second-highest-priority candidate. The score doesn't
+ * need to repeat them to keep them visible.
+ *
+ * Emergency and Future Options both count now, not just Emergency, because
+ * a score that only ever reflects one of two real goals isn't answering
+ * "how are my goals doing" — it's answering half of it.
  *
  * This computes no new fact. Every input already exists and is already shown
  * elsewhere in full; this is a weighted read of numbers this app already
@@ -29,7 +44,7 @@ export const HEALTH_TIER_LABEL: Record<HealthTier, string> = {
 };
 
 export interface HealthFactor {
-  key: 'PACE' | 'HEADROOM' | 'EMERGENCY' | 'ATTENTIVENESS' | 'CURRENCY';
+  key: 'PACE' | 'HEADROOM' | 'EMERGENCY' | 'FUTURE_OPTIONS';
   label: string;
   /** 0-100. */
   score: number;
@@ -62,25 +77,22 @@ const WEIGHTS = {
   PACE: 0.35,
   HEADROOM: 0.3,
   EMERGENCY: 0.2,
-  ATTENTIVENESS: 0.1,
-  CURRENCY: 0.05,
+  FUTURE_OPTIONS: 0.15,
 } as const;
 
 export function computeFinancialHealth(input: {
   categories: readonly CategoryLine[];
   safeToSpend: SafeToSpendResult;
   emergencyProgressPct: number;
-  unreviewedLeakageCount: number;
-  cycleOverdue: boolean;
+  futureOptionsProgressPct: number;
 }): FinancialHealth {
-  const { categories, safeToSpend, emergencyProgressPct, unreviewedLeakageCount, cycleOverdue } = input;
+  const { categories, safeToSpend, emergencyProgressPct, futureOptionsProgressPct } = input;
 
   const factors: HealthFactor[] = [
     paceFactor(categories),
     headroomFactor(safeToSpend),
-    emergencyFactor(emergencyProgressPct),
-    attentivenessFactor(unreviewedLeakageCount),
-    currencyFactor(cycleOverdue),
+    goalFactor('EMERGENCY', 'Emergency fund', emergencyProgressPct),
+    goalFactor('FUTURE_OPTIONS', 'Future Options', futureOptionsProgressPct),
   ];
 
   const score = Math.round(factors.reduce((sum, f) => sum + f.score * f.weight, 0));
@@ -177,40 +189,18 @@ function headroomFactor(safeToSpend: SafeToSpendResult): HealthFactor {
   };
 }
 
-function emergencyFactor(progressPct: number): HealthFactor {
+function goalFactor(
+  key: 'EMERGENCY' | 'FUTURE_OPTIONS',
+  label: string,
+  progressPct: number,
+): HealthFactor {
   const score = Math.max(0, Math.min(100, Math.round(progressPct)));
   return {
-    key: 'EMERGENCY',
-    label: 'Emergency fund',
+    key,
+    label,
     score,
-    weight: WEIGHTS.EMERGENCY,
-    detail: `${score}% of the Emergency target funded.`,
-  };
-}
-
-function attentivenessFactor(unreviewedCount: number): HealthFactor {
-  const score = unreviewedCount === 0 ? 100 : unreviewedCount === 1 ? 60 : 30;
-  return {
-    key: 'ATTENTIVENESS',
-    label: 'Attentiveness',
-    score,
-    weight: WEIGHTS.ATTENTIVENESS,
-    detail:
-      unreviewedCount === 0
-        ? 'Nothing waiting for a leakage verdict.'
-        : `${unreviewedCount} leakage ${unreviewedCount === 1 ? 'finding' : 'findings'} waiting for a look.`,
-  };
-}
-
-function currencyFactor(overdue: boolean): HealthFactor {
-  return {
-    key: 'CURRENCY',
-    label: 'Pay cycle',
-    score: overdue ? 40 : 100,
-    weight: WEIGHTS.CURRENCY,
-    detail: overdue
-      ? 'Payday is running late, so the figures behind this score are stretching past the cycle they were built for.'
-      : 'The current pay cycle is up to date.',
+    weight: WEIGHTS[key],
+    detail: `${score}% of the ${label} target funded.`,
   };
 }
 

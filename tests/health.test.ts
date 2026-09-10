@@ -35,8 +35,7 @@ describe('financial health', () => {
       categories,
       safeToSpend,
       emergencyProgressPct: 100,
-      unreviewedLeakageCount: 0,
-      cycleOverdue: false,
+      futureOptionsProgressPct: 100,
     });
 
     expect(health.status).toBe('READY');
@@ -51,8 +50,7 @@ describe('financial health', () => {
       categories: clean,
       safeToSpend,
       emergencyProgressPct: 100,
-      unreviewedLeakageCount: 0,
-      cycleOverdue: false,
+      futureOptionsProgressPct: 100,
     });
 
     const strained = clean.map((c) =>
@@ -63,8 +61,7 @@ describe('financial health', () => {
       categories: strained,
       safeToSpend: strainedSafeToSpend,
       emergencyProgressPct: 100,
-      unreviewedLeakageCount: 0,
-      cycleOverdue: false,
+      futureOptionsProgressPct: 100,
     });
 
     expect(withSpentCategory.score).toBeLessThan(baseline.score);
@@ -79,8 +76,7 @@ describe('financial health', () => {
       categories,
       safeToSpend,
       emergencyProgressPct: 100,
-      unreviewedLeakageCount: 0,
-      cycleOverdue: false,
+      futureOptionsProgressPct: 100,
     });
 
     const pace = health.factors.find((f) => f.key === 'PACE')!;
@@ -100,8 +96,7 @@ describe('financial health', () => {
       categories,
       safeToSpend,
       emergencyProgressPct: 100,
-      unreviewedLeakageCount: 0,
-      cycleOverdue: false,
+      futureOptionsProgressPct: 100,
     });
 
     const headroom = health.factors.find((f) => f.key === 'HEADROOM')!;
@@ -116,33 +111,47 @@ describe('financial health', () => {
       categories,
       safeToSpend,
       emergencyProgressPct: 50,
-      unreviewedLeakageCount: 0,
-      cycleOverdue: false,
+      futureOptionsProgressPct: 100,
     });
 
     expect(half.factors.find((f) => f.key === 'EMERGENCY')!.score).toBe(50);
   });
 
-  it('lowers the attentiveness factor with unreviewed leakage, worth noticing rather than alarming', () => {
+  it('reflects Future Options coverage directly in its factor score, independent of Emergency', () => {
     const categories = onTrackCategories();
     const safeToSpend = calculateSafeToSpend({ categories, daysRemaining: 7 });
 
-    const clean = computeFinancialHealth({
+    const health = computeFinancialHealth({
       categories,
       safeToSpend,
       emergencyProgressPct: 100,
-      unreviewedLeakageCount: 0,
-      cycleOverdue: false,
-    });
-    const withLeakage = computeFinancialHealth({
-      categories,
-      safeToSpend,
-      emergencyProgressPct: 100,
-      unreviewedLeakageCount: 2,
-      cycleOverdue: false,
+      futureOptionsProgressPct: 20,
     });
 
-    expect(withLeakage.score).toBeLessThan(clean.score);
+    const futureOptions = health.factors.find((f) => f.key === 'FUTURE_OPTIONS')!;
+    expect(futureOptions.score).toBe(20);
+    // A fully-funded Emergency does not mask a barely-started Future Options.
+    expect(health.score).toBeLessThan(100);
+  });
+
+  it('weighs both goals, so the score reflects two goals rather than just one', () => {
+    const categories = onTrackCategories();
+    const safeToSpend = calculateSafeToSpend({ categories, daysRemaining: 7 });
+
+    const onlyEmergency = computeFinancialHealth({
+      categories,
+      safeToSpend,
+      emergencyProgressPct: 100,
+      futureOptionsProgressPct: 0,
+    });
+    const both = computeFinancialHealth({
+      categories,
+      safeToSpend,
+      emergencyProgressPct: 100,
+      futureOptionsProgressPct: 100,
+    });
+
+    expect(both.score).toBeGreaterThan(onlyEmergency.score);
   });
 
   it('answers "should I spend right now" from the same safe-to-spend figure, not a rival number', () => {
@@ -153,8 +162,7 @@ describe('financial health', () => {
       categories,
       safeToSpend,
       emergencyProgressPct: 100,
-      unreviewedLeakageCount: 0,
-      cycleOverdue: false,
+      futureOptionsProgressPct: 100,
     });
 
     expect(health.spendingGuidance).toContain(
@@ -163,11 +171,6 @@ describe('financial health', () => {
   });
 
   it('tells you to hold off, calmly, when nothing discretionary is spare', () => {
-    const categories = onTrackCategories().map((c) =>
-      c.role === 'DINING_SOCIAL' || c.role === 'FUN' || c.role === 'GEAR_OBJECTS'
-        ? { ...c, remainingCents: 0 }
-        : c,
-    );
     const spent = onTrackCategories(50).map((c) =>
       ['DINING_SOCIAL', 'FUN', 'GEAR_OBJECTS'].includes(c.role)
         ? line(c.role, c.allocatedCents, c.allocatedCents, 50)
@@ -180,8 +183,7 @@ describe('financial health', () => {
       categories: spent,
       safeToSpend,
       emergencyProgressPct: 100,
-      unreviewedLeakageCount: 0,
-      cycleOverdue: false,
+      futureOptionsProgressPct: 100,
     });
 
     expect(health.spendingGuidance.toLowerCase()).toContain('hold off');
@@ -196,8 +198,7 @@ describe('financial health', () => {
       categories,
       safeToSpend,
       emergencyProgressPct: 250, // over target is possible; the factor must still clamp
-      unreviewedLeakageCount: 5,
-      cycleOverdue: true,
+      futureOptionsProgressPct: -10, // defensive: never expect a negative progress figure either
     });
 
     expect(health.score).toBeGreaterThanOrEqual(0);
@@ -206,5 +207,20 @@ describe('financial health', () => {
       expect(factor.score).toBeGreaterThanOrEqual(0);
       expect(factor.score).toBeLessThanOrEqual(100);
     }
+  });
+
+  it('weights sum to exactly 100%, so the score is never silently capped below 100', () => {
+    const categories = onTrackCategories();
+    const safeToSpend = calculateSafeToSpend({ categories, daysRemaining: 7 });
+
+    const health = computeFinancialHealth({
+      categories,
+      safeToSpend,
+      emergencyProgressPct: 100,
+      futureOptionsProgressPct: 100,
+    });
+
+    const totalWeight = health.factors.reduce((sum, f) => sum + f.weight, 0);
+    expect(totalWeight).toBeCloseTo(1, 5);
   });
 });

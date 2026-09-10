@@ -17,11 +17,11 @@ const TIER_TRACK: Record<HealthTier, string> = {
 };
 
 /**
- * One score standing in for the five numbers already shown individually
- * elsewhere on Today — pace, spending room, Emergency coverage,
- * attentiveness, and how current the pay cycle is. Nothing here is computed
- * twice: opening "What's behind this?" shows the same figures already
- * trusted on Pay Cycle, Goals and Review, just weighted into one read.
+ * One score standing in for the four numbers already shown individually
+ * elsewhere — pace, spending room, Emergency coverage, Future Options
+ * coverage. Nothing here is computed twice: opening "What's behind this?"
+ * shows the same figures already trusted on Pay Cycle and Goals, just
+ * weighted into one read.
  */
 export function FinancialHealthCard({ health }: { health: FinancialHealth }) {
   const color = TIER_COLOR[health.tier];
@@ -86,8 +86,8 @@ export function FinancialHealthCard({ health }: { health: FinancialHealth }) {
         </ul>
         <p className="mt-3">
           Every number behind this score is shown in full elsewhere — this just weighs them
-          together. Pace and spending room count for most of it; Emergency coverage, staying on
-          top of leakage findings and an up-to-date pay cycle make up the rest.
+          together. Pace and spending room count for most of it; Emergency and Future Options
+          coverage make up the rest, so the score reflects both goals, not just one.
         </p>
       </Why>
     </Card>
