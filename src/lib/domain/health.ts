@@ -86,7 +86,24 @@ export interface InsufficientHealth {
 
 export type ProtectionKind = 'DEATH' | 'TPD' | 'INCOME_PROTECTION' | 'HEALTH' | 'BENEFICIARY';
 
-const PROTECTION_LABEL: Record<ProtectionKind, string> = {
+export type AdminKind =
+  | 'TAX_RETURN'
+  | 'SUPER_REVIEW'
+  | 'INSURANCE_REVIEW'
+  | 'BENEFICIARY_REVIEW'
+  | 'RECURRING_COST_REVIEW'
+  | 'ANNUAL_REVIEW';
+
+export const ADMIN_LABEL: Record<AdminKind, string> = {
+  TAX_RETURN: 'Tax return',
+  SUPER_REVIEW: 'Super review',
+  INSURANCE_REVIEW: 'Insurance review',
+  BENEFICIARY_REVIEW: 'Beneficiary review',
+  RECURRING_COST_REVIEW: 'Recurring-cost review',
+  ANNUAL_REVIEW: 'Annual financial review',
+};
+
+export const PROTECTION_LABEL: Record<ProtectionKind, string> = {
   DEATH: 'Death cover',
   TPD: 'TPD cover',
   INCOME_PROTECTION: 'Income protection',

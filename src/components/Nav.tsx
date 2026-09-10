@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   BarChart3,
   CalendarRange,
+  HeartPulse,
   Home,
   Receipt,
   Settings,
@@ -19,6 +20,7 @@ const ITEMS = [
   { href: '/goals', label: 'Goals', Icon: Target },
   { href: '/shopping', label: 'Shopping', Icon: ShoppingBag },
   { href: '/review', label: 'Review', Icon: BarChart3 },
+  { href: '/health', label: 'Health', Icon: HeartPulse },
   { href: '/transactions', label: 'Transactions', Icon: Receipt },
   { href: '/settings', label: 'Settings', Icon: Settings },
 ] as const;

@@ -24,13 +24,20 @@ import { STATUS_LABEL } from '@/lib/domain/status';
 import {
   AiError,
   estimateCostCents,
+  generateHealthSummary,
   generatePlanningNarrative,
   generateReviewNarrative,
   generateTodayHeadline,
+  type HealthSummary,
 } from '@/lib/ai/claude';
 import { getTodayView } from './overview';
 import { getReview, type ReviewPeriod } from './review';
 import { getGoalPlans } from './planning';
+import { getScoreTrend } from './healthScoreHistory';
+import { getBalanceSheet } from './balanceSheet';
+import { getFreedomRate } from './freedomRate';
+import { getRunway } from './runway';
+import { getSettings } from './settings';
 
 export { AiError };
 
@@ -270,6 +277,100 @@ export async function regeneratePlanningAiInsight(): Promise<void> {
       model: result.model,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
+      generatedAt: new Date(),
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Health
+// ---------------------------------------------------------------------------
+
+export interface HealthAiSummary extends HealthSummary {
+  generatedAt: Date;
+  model: string;
+  costCents: number;
+}
+
+export async function getHealthAiSummary(): Promise<HealthAiSummary | null> {
+  const row = await prisma.aiInsight.findUnique({ where: { kind: 'HEALTH_SUMMARY' } });
+  if (!row || !row.summary) return null;
+  const summary = row.summary as unknown as HealthSummary;
+  return {
+    ...summary,
+    generatedAt: row.generatedAt,
+    model: row.model,
+    costCents: estimateCostCents(row),
+  };
+}
+
+export async function regenerateHealthAiSummary(): Promise<void> {
+  const now = new Date();
+  const [view, trend, balanceSheet, freedomRate, runway, plans, settings] = await Promise.all([
+    getTodayView(now),
+    getScoreTrend(now),
+    getBalanceSheet(),
+    getFreedomRate(now),
+    getRunway(now),
+    getGoalPlans(now),
+    getSettings(),
+  ]);
+
+  const previousScore = trend?.oneMonthAgo?.score ?? null;
+
+  const context = {
+    financialHealthScore: view.health.status === 'READY' ? view.health.score : null,
+    financialHealthTier: view.health.status === 'READY' ? view.health.tierLabel : null,
+    previousScoreOneMonthAgo: previousScore,
+    dimensions:
+      view.health.status === 'READY'
+        ? view.health.dimensions.map((d) => ({
+            label: d.label,
+            points: d.points,
+            maxPoints: d.maxPoints,
+            factors: d.subFactors.map((f) => ({ label: f.label, points: f.points, detail: f.detail })),
+          }))
+        : null,
+    netFinancialAssets: formatCents(balanceSheet.netFinancialAssetsCents),
+    accessibleFinancialAssets: formatCents(balanceSheet.accessibleFinancialAssetsCents),
+    freedomRate: {
+      thisCycle: `${freedomRate.cycle.pct}%`,
+      rolling3Months: `${freedomRate.rolling3Months.pct}%`,
+      rolling12Months: `${freedomRate.rolling12Months.pct}%`,
+      referencePoint: `${settings.freedomRateTargetPct}%`,
+    },
+    runway: {
+      survivalMonths: runway.survival.months,
+      normalLifeMonths: runway.normalLife.months,
+      careerBreakMonths: runway.careerBreak.months,
+    },
+    goals: plans.map((g) => ({
+      name: g.name,
+      current: formatCents(g.currentCents),
+      target: formatCents(g.targetCents),
+      reached: g.reachedAt !== null,
+      projectedDate: g.projection.projectedDate ? g.projection.projectedDate.toISOString().slice(0, 10) : null,
+    })),
+  };
+
+  const result = await generateHealthSummary(context);
+  const { whatChanged, goingWell, worthNoticing, bestNextMove, context: contextText, ...usage } = result;
+  const summaryJson = { whatChanged, goingWell, worthNoticing, bestNextMove, context: contextText };
+
+  await prisma.aiInsight.upsert({
+    where: { kind: 'HEALTH_SUMMARY' },
+    create: {
+      kind: 'HEALTH_SUMMARY',
+      summary: summaryJson,
+      model: usage.model,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+    },
+    update: {
+      summary: summaryJson,
+      model: usage.model,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
       generatedAt: new Date(),
     },
   });

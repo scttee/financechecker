@@ -319,7 +319,7 @@ function plannedInvestingCents(
  * investing contribution — a consistency signal, not just "did it happen
  * this cycle".
  */
-async function recentCyclesWithInvesting(currentCycleId: string, take: number): Promise<number> {
+export async function recentCyclesWithInvesting(currentCycleId: string, take: number): Promise<number> {
   const current = await prisma.payCycle.findUnique({ where: { id: currentCycleId } });
   if (!current) return 0;
 

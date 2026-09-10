@@ -16,6 +16,7 @@ import {
   Notice,
   Pill,
   Progress,
+  Select,
   Why,
 } from '@/components/ui';
 import { addAssetSnapshotAction, addExternalAssetAction, regeneratePlanningInsightAction } from '@/app/actions';
@@ -232,7 +233,10 @@ export default async function GoalsPage({
                 <li key={asset.id} className="py-3 first:pt-0">
                   <div className="flex items-baseline justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-medium">{asset.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-medium">{asset.name}</p>
+                        {asset.kind === 'DEBT' ? <Pill tone="attention">Debt</Pill> : null}
+                      </div>
                       {asset.provider ? (
                         <p className="text-xs text-faint">{asset.provider}</p>
                       ) : null}
@@ -302,7 +306,17 @@ export default async function GoalsPage({
           <form action={addExternalAssetAction} className="mt-2 flex flex-wrap items-end gap-2">
             <div className="min-w-[12rem] flex-1">
               <Field label="Name" htmlFor="asset-name">
-                <Input id="asset-name" name="name" placeholder="e.g. Vanguard" required />
+                <Input id="asset-name" name="name" placeholder="e.g. Vanguard, or a card/loan for debt" required />
+              </Field>
+            </div>
+            <div className="w-36">
+              <Field label="Kind" htmlFor="asset-kind">
+                <Select id="asset-kind" name="kind" defaultValue="INVESTMENT">
+                  <option value="INVESTMENT">Investment</option>
+                  <option value="SUPER">Super</option>
+                  <option value="DEBT">Debt</option>
+                  <option value="OTHER">Other</option>
+                </Select>
               </Field>
             </div>
             <div className="min-w-[10rem] flex-1">
@@ -314,6 +328,10 @@ export default async function GoalsPage({
               Add
             </Button>
           </form>
+          <p className="mt-2 text-xs text-faint">
+            For debt, snapshot the amount owed as a positive balance — it is subtracted automatically
+            on the Health page.
+          </p>
         </details>
 
         <Notice tone="neutral">

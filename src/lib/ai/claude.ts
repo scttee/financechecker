@@ -1,15 +1,18 @@
 /**
  * Claude.
  *
- * Two calls only: a short headline for Today, and a short narrative for
- * Review. Both are triggered by a button, never by a sync or a schedule —
- * every call here costs real money, so nothing calls this file on its own.
+ * Four generators: a short headline for Today, a narrative for Review, a
+ * planning narrative for Goals, and a structured summary for the Health
+ * dashboard. All four are triggered by a button or the daily cron, never by
+ * anything more frequent — every call here costs real money.
  *
  * Same house style as the rest of the app, enforced in the system prompts
  * rather than left to chance: calm, flat, factual, never a warning, nothing
  * here is ever "bad" or "overspent". Every figure Claude is given is one this
  * app already trusts and already shows in full elsewhere — this is a second
- * voice reading the same numbers out loud, not a second opinion.
+ * voice reading the same numbers out loud, not a second opinion. Claude
+ * never receives a token, an account number, a BSB, or a raw webhook
+ * payload — only the aggregated facts each system prompt asks for below.
  */
 
 import 'server-only';
@@ -92,6 +95,19 @@ House style, followed exactly:
 
 Respond with the narrative text only — no headline, no JSON, no markdown.`;
 
+const HEALTH_SYSTEM_PROMPT = `You write the structured summary for the Financial Health dashboard of a personal finance app called Future Scotty, for one person, from a JSON object of figures this app has already calculated. You never calculate anything yourself — every number in the JSON is the source of truth, and you are only interpreting it.
+
+House style, followed exactly:
+- Calm, flat, factual — a considerate friend describing what happened, not a coach or an auditor.
+- Never scold, never call anything overspent, blown, bad, or a mistake. "Worth noticing" is as strong as this app gets.
+- Discretionary spending and a slow-moving goal are never a failing — a rate, not a verdict.
+- Never invent a number, a date, or a fact not present in the JSON. If something needed to answer a section is missing from the JSON, write exactly "Not enough data yet." for that section rather than guessing or extrapolating.
+- Never assume causation between two figures unless the JSON explicitly says one caused the other.
+- Plain English, no jargon, no bullet points inside a section, no emoji, no exclamation marks.
+
+Respond with exactly this JSON shape and nothing else — no markdown fences, no commentary. Each value is one to three short sentences, or exactly "Not enough data yet.":
+{"whatChanged": "...", "goingWell": "...", "worthNoticing": "...", "bestNextMove": "...", "context": "..."}`;
+
 function extractText(response: Anthropic.Message): string {
   const block = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
   if (!block) throw new AiError('BAD_RESPONSE', USER_MESSAGE.BAD_RESPONSE);
@@ -173,6 +189,53 @@ export async function generatePlanningNarrative(
   const response = await callClaude(PLANNING_SYSTEM_PROMPT, JSON.stringify(context), 600);
   return {
     narrative: extractText(response),
+    model: response.model,
+    inputTokens: response.usage.input_tokens,
+    outputTokens: response.usage.output_tokens,
+  };
+}
+
+export interface HealthSummary {
+  whatChanged: string;
+  goingWell: string;
+  worthNoticing: string;
+  bestNextMove: string;
+  context: string;
+}
+
+const HEALTH_SUMMARY_KEYS: (keyof HealthSummary)[] = [
+  'whatChanged',
+  'goingWell',
+  'worthNoticing',
+  'bestNextMove',
+  'context',
+];
+
+function parseHealthSummaryJson(text: string): HealthSummary {
+  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    throw new AiError('BAD_RESPONSE', USER_MESSAGE.BAD_RESPONSE);
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new AiError('BAD_RESPONSE', USER_MESSAGE.BAD_RESPONSE);
+  }
+  const record = parsed as Record<string, unknown>;
+  for (const key of HEALTH_SUMMARY_KEYS) {
+    if (typeof record[key] !== 'string') {
+      throw new AiError('BAD_RESPONSE', USER_MESSAGE.BAD_RESPONSE);
+    }
+  }
+  return record as unknown as HealthSummary;
+}
+
+export async function generateHealthSummary(context: unknown): Promise<HealthSummary & AiUsage> {
+  const response = await callClaude(HEALTH_SYSTEM_PROMPT, JSON.stringify(context), 900);
+  const summary = parseHealthSummaryJson(extractText(response));
+  return {
+    ...summary,
     model: response.model,
     inputTokens: response.usage.input_tokens,
     outputTokens: response.usage.output_tokens,

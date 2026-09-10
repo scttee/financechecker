@@ -25,6 +25,8 @@ export interface GoalPlan {
   targetCents: Cents;
   reachedAt: Date | null;
   projection: GoalProjection;
+  /** Exposed so "what if I contributed more" can call projectGoal() again with the same cycle length. */
+  cycleLengthDays: number;
 }
 
 export async function getGoalPlans(now: Date = new Date()): Promise<GoalPlan[]> {
@@ -65,6 +67,7 @@ export async function getGoalPlans(now: Date = new Date()): Promise<GoalPlan[]> 
         now,
         cycleLengthDays,
       }),
+      cycleLengthDays,
     };
   });
 }

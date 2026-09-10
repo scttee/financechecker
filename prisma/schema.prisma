@@ -740,8 +740,11 @@ model AiInsight {
   headline String?
   detail   String?
 
-  /// REVIEW_* only.
+  /// REVIEW_* and PLANNING only.
   narrative String?
+
+  /// HEALTH_SUMMARY only. {whatChanged, goingWell, worthNoticing, bestNextMove, context}.
+  summary Json?
 
   model        String
   inputTokens  Int

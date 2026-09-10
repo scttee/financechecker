@@ -10,7 +10,16 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { AccountRole, LeakageVerdict, Priority, RecurringStatus, WishlistStatus } from '@prisma/client';
+import type {
+  AccountRole,
+  AdminKind,
+  AssetKind,
+  LeakageVerdict,
+  Priority,
+  ProtectionKind,
+  RecurringStatus,
+  WishlistStatus,
+} from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { endSession, requireSession } from '@/lib/auth/session';
 import { parseDecimalToCents } from '@/lib/money';
@@ -27,7 +36,10 @@ import {
   regeneratePlanningAiInsight,
   regenerateReviewAiInsight,
   regenerateTodayAiInsight,
+  regenerateHealthAiSummary,
 } from '@/lib/services/aiInsight';
+import { saveProtectionItem } from '@/lib/services/protection';
+import { saveAdminItem } from '@/lib/services/admin';
 import type { ReviewPeriod } from '@/lib/services/review';
 import { pushSimulatedPayday } from '@/lib/up/gateway';
 import { useMockData } from '@/lib/env';
@@ -466,11 +478,16 @@ export async function addExternalAssetAction(formData: FormData) {
   const name = String(formData.get('name') ?? '').trim();
   if (!name) return;
 
+  const rawKind = String(formData.get('kind') ?? 'INVESTMENT');
+  const kind: AssetKind = (['INVESTMENT', 'SUPER', 'DEBT', 'OTHER'] as const).includes(rawKind as AssetKind)
+    ? (rawKind as AssetKind)
+    : 'INVESTMENT';
+
   const key = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   await prisma.externalAsset.upsert({
     where: { key },
-    create: { key, name, provider: String(formData.get('provider') ?? '') || null },
-    update: { name },
+    create: { key, name, kind, provider: String(formData.get('provider') ?? '') || null },
+    update: { name, kind },
   });
   revalidateAll();
 }
@@ -537,6 +554,81 @@ export async function regeneratePlanningInsightAction() {
 
   revalidatePath('/goals');
   if (errorMessage) redirect(`/goals?aiError=${encodeURIComponent(errorMessage)}`);
+}
+
+export async function regenerateHealthInsightAction() {
+  await requireSession();
+
+  let errorMessage: string | null = null;
+  try {
+    await regenerateHealthAiSummary();
+  } catch (error) {
+    errorMessage = error instanceof AiError ? error.userMessage : 'Could not reach Claude.';
+  }
+
+  revalidatePath('/health');
+  if (errorMessage) redirect(`/health?aiError=${encodeURIComponent(errorMessage)}`);
+}
+
+// ---------------------------------------------------------------------------
+// Protection and admin
+// ---------------------------------------------------------------------------
+
+function parseOptionalDate(formData: FormData, field: string): Date | null {
+  const raw = String(formData.get(field) ?? '').trim();
+  return raw ? new Date(`${raw}T12:00:00`) : null;
+}
+
+function parseOptionalText(formData: FormData, field: string): string | null {
+  const raw = String(formData.get(field) ?? '').trim();
+  return raw || null;
+}
+
+export async function saveProtectionItemAction(formData: FormData) {
+  await requireSession();
+  const kind = String(formData.get('kind') ?? '') as ProtectionKind;
+  if (!kind) return;
+
+  const rawCover = String(formData.get('coverCents') ?? '').trim();
+  const rawPremium = String(formData.get('premiumCents') ?? '').trim();
+
+  let coverCents: number | null = null;
+  let premiumCents: number | null = null;
+  try {
+    coverCents = rawCover ? parseDecimalToCents(rawCover) : null;
+    premiumCents = rawPremium ? parseDecimalToCents(rawPremium) : null;
+  } catch {
+    return;
+  }
+
+  await saveProtectionItem({
+    kind,
+    provider: parseOptionalText(formData, 'provider'),
+    coverCents,
+    premiumCents,
+    waitingPeriod: parseOptionalText(formData, 'waitingPeriod'),
+    benefitPeriod: parseOptionalText(formData, 'benefitPeriod'),
+    lastReviewed: parseOptionalDate(formData, 'lastReviewed'),
+    nextReview: parseOptionalDate(formData, 'nextReview'),
+    notes: parseOptionalText(formData, 'notes'),
+  });
+
+  revalidatePath('/health');
+}
+
+export async function saveAdminItemAction(formData: FormData) {
+  await requireSession();
+  const kind = String(formData.get('kind') ?? '') as AdminKind;
+  if (!kind) return;
+
+  await saveAdminItem({
+    kind,
+    lastCompleted: parseOptionalDate(formData, 'lastCompleted'),
+    nextDue: parseOptionalDate(formData, 'nextDue'),
+    notes: parseOptionalText(formData, 'notes'),
+  });
+
+  revalidatePath('/health');
 }
 
 export async function saveWishlistItemAction(formData: FormData) {

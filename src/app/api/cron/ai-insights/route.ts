@@ -6,12 +6,12 @@
  * discipline as the Up webhook signature, against CRON_SECRET rather than a
  * cookie. This is the only thing in the app that calls Claude without a
  * person pressing a button, and the AI calls are bounded to once a day on
- * purpose: three of them (Today's headline, this week's review, the
- * planning narrative), not a loop over every period, so the cost stays
- * predictable regardless of how the schedule fires. The score snapshot is
- * free (no AI, no external call) — it rides along here because "once a
- * day" is exactly the cadence a trend line needs, and one cron is simpler
- * than two.
+ * purpose: four of them (Today's headline, this week's review, the
+ * planning narrative, the health summary), not a loop over every period,
+ * so the cost stays predictable regardless of how the schedule fires. The
+ * score snapshot is free (no AI, no external call) — it rides along here
+ * because "once a day" is exactly the cadence a trend line needs, and one
+ * cron is simpler than two.
  *
  * Exempt from the session gate for the same reason the webhook and health
  * check are — a cron job has no session to send.
@@ -22,6 +22,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { cronSecret } from '@/lib/env';
 import {
   AiError,
+  regenerateHealthAiSummary,
   regeneratePlanningAiInsight,
   regenerateReviewAiInsight,
   regenerateTodayAiInsight,
@@ -72,6 +73,13 @@ export async function POST(request: Request) {
     results.planning = 'ok';
   } catch (error) {
     results.planning = error instanceof AiError ? error.userMessage : 'failed';
+  }
+
+  try {
+    await regenerateHealthAiSummary();
+    results.healthSummary = 'ok';
+  } catch (error) {
+    results.healthSummary = error instanceof AiError ? error.userMessage : 'failed';
   }
 
   try {
