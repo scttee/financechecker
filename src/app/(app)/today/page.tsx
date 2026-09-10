@@ -54,17 +54,50 @@ export default async function TodayPage({
 
   return (
     <div className="space-y-3">
-      {/* The score. One number standing in for the five that answer "am I
-          okay, and should I be spending right now" — everything below it is
-          the same numbers shown individually, and the working behind the
-          score itself is one tap away. */}
-      {health.status === 'READY' ? <FinancialHealthCard health={health} /> : null}
-
       {params.aiError ? (
         <Notice tone="notice" title="Claude did not answer">
           <p>{params.aiError}</p>
         </Notice>
       ) : null}
+
+      {!setup.complete ? (
+        <Notice tone="notice" title="Setup is not finished">
+          <ul className="list-inside list-disc space-y-1">
+            {setup.missing.map((m) => (
+              <li key={m}>{m}</li>
+            ))}
+          </ul>
+          <p className="mt-2">
+            <Link href="/setup" className="font-medium text-accent hover:underline">
+              Finish setup
+            </Link>
+          </p>
+        </Notice>
+      ) : null}
+
+      {/* Safe to spend. The number this app exists to get right, checked
+          daily — top of the screen, ahead of the score and the insight,
+          because "what can I spend today" is the actual question. */}
+      {safeToSpend && cycle ? (
+        <SafeToSpendCard
+          result={safeToSpend}
+          daysToPayday={cycle.progress.daysRemaining}
+          nextPayday={cycle.endAt}
+          nextPaydayIsProjected={cycle.endIsProjected}
+          timezone={view.timezone}
+        />
+      ) : (
+        <Empty
+          title="No pay cycle yet"
+          body="Once a salary payment is found, safe-to-spend starts working."
+          action={<LinkButton href="/settings?tab=salary">Check the salary rule</LinkButton>}
+        />
+      )}
+
+      {/* The score. One number standing in for the four that answer "am I
+          okay, and should I be spending right now" — the working behind the
+          score itself is one tap away. */}
+      {health.status === 'READY' ? <FinancialHealthCard health={health} /> : null}
 
       {/* The one insight. Whatever is worth saying in a full sentence today,
           distinct from the score above it. Claude's take stands in for the
@@ -131,38 +164,6 @@ export default async function TodayPage({
           </form>
         ) : null}
       </Card>
-
-      {!setup.complete ? (
-        <Notice tone="notice" title="Setup is not finished">
-          <ul className="list-inside list-disc space-y-1">
-            {setup.missing.map((m) => (
-              <li key={m}>{m}</li>
-            ))}
-          </ul>
-          <p className="mt-2">
-            <Link href="/setup" className="font-medium text-accent hover:underline">
-              Finish setup
-            </Link>
-          </p>
-        </Notice>
-      ) : null}
-
-      {/* Safe to spend. The number this app exists to get right. */}
-      {safeToSpend && cycle ? (
-        <SafeToSpendCard
-          result={safeToSpend}
-          daysToPayday={cycle.progress.daysRemaining}
-          nextPayday={cycle.endAt}
-          nextPaydayIsProjected={cycle.endIsProjected}
-          timezone={view.timezone}
-        />
-      ) : (
-        <Empty
-          title="No pay cycle yet"
-          body="Once a salary payment is found, safe-to-spend starts working."
-          action={<LinkButton href="/settings?tab=salary">Check the salary rule</LinkButton>}
-        />
-      )}
 
       {/* Goals. */}
       <div className="grid gap-3 sm:grid-cols-2">

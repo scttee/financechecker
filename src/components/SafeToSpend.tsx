@@ -7,10 +7,12 @@ import { Card, CardHeader, Money, Why } from '@/components/ui';
 /**
  * The safe-to-spend card.
  *
- * Two rules shape this. The daily figure is called a pace rather than an
- * allowance, because it is a way of reading the number rather than a budget to
- * be policed. And the working is always available: a figure I cannot check is
- * a figure I will stop believing.
+ * The hero figure is today's pace, not the total until payday — "what can I
+ * spend today" is the question this gets checked daily to answer, and the
+ * total is context for that, not the other way around. Still called a pace
+ * rather than an allowance, because it is a way of reading the number rather
+ * than a budget to be policed. And the working is always available: a figure
+ * I cannot check is a figure I will stop believing.
  */
 export function SafeToSpendCard({
   result,
@@ -28,7 +30,7 @@ export function SafeToSpendCard({
   return (
     <Card id="safe-to-spend">
       <CardHeader
-        title="Safe to spend until payday"
+        title="You can spend today"
         hint={
           nextPaydayIsProjected
             ? `Payday projected for ${formatDayShort(nextPayday, timezone)}`
@@ -36,15 +38,12 @@ export function SafeToSpendCard({
         }
       />
 
-      <p className="tabular text-figure">{formatCents(result.safeToSpendCents)}</p>
+      <p className="tabular text-figure">{formatCents(result.perDayCents, { showCents: false })}</p>
 
       <p className="mt-1.5 text-sm text-muted">
-        Available pace: about{' '}
-        <span className="tabular font-medium text-ink">
-          {formatCents(result.perDayCents, { showCents: result.perDayCents < 1000 })}
-        </span>
-        /day over {daysToPayday} {daysToPayday === 1 ? 'day' : 'days'}. Not an allowance, just the
-        rate this spreads to.
+        <span className="tabular font-medium text-ink">{formatCents(result.safeToSpendCents)}</span>{' '}
+        total over {daysToPayday} {daysToPayday === 1 ? 'day' : 'days'} to payday. Not an
+        allowance, just the rate this spreads to.
       </p>
 
       {result.safeToSpendCents === 0 ? (
