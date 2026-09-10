@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getTodayView } from '@/lib/services/overview';
 import { getSetupState } from '@/lib/services/settings';
 import { getTodayAiInsight } from '@/lib/services/aiInsight';
+import { getScoreTrend } from '@/lib/services/healthScoreHistory';
 import { configStatus } from '@/lib/env';
 import { formatCents } from '@/lib/money';
 import { formatDayShort, formatDateTime } from '@/lib/time';
@@ -45,7 +46,11 @@ export default async function TodayPage({
     );
   }
 
-  const [view, aiInsight] = await Promise.all([getTodayView(), getTodayAiInsight()]);
+  const [view, aiInsight, scoreTrend] = await Promise.all([
+    getTodayView(),
+    getTodayAiInsight(),
+    getScoreTrend(),
+  ]);
   const { cycle, insight, health, safeToSpend } = view;
   const status = configStatus();
 
@@ -97,7 +102,7 @@ export default async function TodayPage({
       {/* The score. One number standing in for the four that answer "am I
           okay, and should I be spending right now" — the working behind the
           score itself is one tap away. */}
-      {health.status === 'READY' ? <FinancialHealthCard health={health} /> : null}
+      {health.status === 'READY' ? <FinancialHealthCard health={health} trend={scoreTrend} /> : null}
 
       {/* The one insight. Whatever is worth saying in a full sentence today,
           distinct from the score above it. Claude's take stands in for the

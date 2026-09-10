@@ -13,12 +13,18 @@ import { prisma } from '@/lib/db';
 import { calculateSafeToSpend, type SafeToSpendResult, type UpcomingCommitment } from '@/lib/domain/safeToSpend';
 import { categoryStatus, type CategoryLine } from '@/lib/domain/status';
 import { computeFinancialHealth, type FinancialHealth, type InsufficientHealth } from '@/lib/domain/health';
+import { calculatePaydayAllocation } from '@/lib/domain/allocation';
 import { budgetedRoles, roleDefinition } from '@/lib/domain/roles';
 import { cycleProgress, spendingDaysRemaining, type CycleProgress, type DerivedPayCycle } from '@/lib/domain/payCycle';
 import { expectedBefore } from '@/lib/domain/recurring';
-import { getBalancesByRole, getLiquidBalance, getSettings, thresholdsFrom } from './settings';
+import { getAllocationPercents, getBalancesByRole, getLiquidBalance, getSettings, thresholdsFrom } from './settings';
 import { leakageInPeriod } from './leakageService';
 import { buildInsight, type Insight } from './insight';
+import { getBalanceSheet } from './balanceSheet';
+import { getFreedomRate } from './freedomRate';
+import { getRunway } from './runway';
+import { getProtectionInputs } from './protection';
+import { getAdminInputs } from './admin';
 
 // ---------------------------------------------------------------------------
 // Cycle view
@@ -233,21 +239,43 @@ export async function getTodayView(now: Date = new Date()): Promise<TodayView> {
 
   const insight = await buildInsight({ cycle, safeToSpend, goals, leakageThisMonth, now });
 
-  const health: FinancialHealth | InsufficientHealth =
-    cycle && safeToSpend
-      ? computeFinancialHealth({
-          categories: cycle.categories,
-          safeToSpend,
-          emergencyProgressPct: goals.find((g) => g.key === 'emergency')?.progressPct ?? 0,
-          futureOptionsProgressPct: goals.find((g) => g.key === 'future_options')?.progressPct ?? 0,
-        })
-      : {
-          status: 'INSUFFICIENT_DATA',
-          headline: 'Not enough to score yet',
-          detail: cycle
-            ? 'Once a pay cycle is fully worked out, a score starts appearing here.'
-            : 'Once a salary payment is found, a score starts appearing here.',
-        };
+  let health: FinancialHealth | InsufficientHealth = {
+    status: 'INSUFFICIENT_DATA',
+    headline: 'Not enough to score yet',
+    detail: cycle
+      ? 'Once a pay cycle is fully worked out, a score starts appearing here.'
+      : 'Once a salary payment is found, a score starts appearing here.',
+  };
+
+  if (cycle && safeToSpend) {
+    const [runway, balanceSheet, allocationPercents, recentInvesting, freedomRate, protectionItems, admin] =
+      await Promise.all([
+        getRunway(now),
+        getBalanceSheet(),
+        getAllocationPercents(cycle.phase),
+        recentCyclesWithInvesting(cycle.id, 3),
+        getFreedomRate(now),
+        getProtectionInputs(now),
+        getAdminInputs(now),
+      ]);
+
+    health = computeFinancialHealth({
+      categories: cycle.categories,
+      safeToSpend,
+      emergencyProgressPct: goals.find((g) => g.key === 'emergency')?.progressPct ?? 0,
+      futureOptionsProgressPct: goals.find((g) => g.key === 'future_options')?.progressPct ?? 0,
+      survivalRunwayMonths: runway.survival.months,
+      debtCents: balanceSheet.debtCents,
+      investedThisCycleCents: cycle.investedCents,
+      plannedInvestingCents: plannedInvestingCents(cycle, allocationPercents),
+      recentCyclesWithContribution: recentInvesting,
+      freedomRatePct: freedomRate.cycle.pct,
+      freedomRateTargetPct: settings.freedomRateTargetPct,
+      protectionItems,
+      adminUpToDateCount: admin.upToDateCount,
+      adminTotalCount: admin.totalCount,
+    });
+  }
 
   return {
     cycle,
@@ -266,6 +294,56 @@ export async function getTodayView(now: Date = new Date()): Promise<TodayView> {
     timezone: settings.timezone,
     lastSyncAt: lastSync?.startedAt ?? null,
   };
+}
+
+/**
+ * What the plan itself says should go to Investing this cycle, using the
+ * cycle's own captured income and rent rather than the settings default —
+ * a bonus pay changes what "planned" means for that cycle.
+ */
+function plannedInvestingCents(
+  cycle: CycleView,
+  percentages: ReadonlyArray<{ role: AccountRole; basisPoints: number }>,
+): number {
+  const allocation = calculatePaydayAllocation({
+    incomeCents: cycle.incomeCents,
+    rentCents: cycle.rentCents,
+    phase: cycle.phase,
+    percentages,
+  });
+  return allocation.rows.find((r) => r.role === 'INVESTING')?.allocatedCents ?? 0;
+}
+
+/**
+ * How many of the pay cycles immediately before this one had a real
+ * investing contribution — a consistency signal, not just "did it happen
+ * this cycle".
+ */
+async function recentCyclesWithInvesting(currentCycleId: string, take: number): Promise<number> {
+  const current = await prisma.payCycle.findUnique({ where: { id: currentCycleId } });
+  if (!current) return 0;
+
+  const previous = await prisma.payCycle.findMany({
+    where: { startAt: { lt: current.startAt } },
+    orderBy: { startAt: 'desc' },
+    take,
+  });
+
+  let count = 0;
+  for (const cyc of previous) {
+    const invested = await prisma.transaction.aggregate({
+      where: {
+        createdAt: { gte: cyc.startAt, lt: cyc.endAt },
+        role: 'INVESTING',
+        amountCents: { lt: 0 },
+        isInternalTransfer: false,
+        deletedAt: null,
+      },
+      _sum: { amountCents: true },
+    });
+    if ((invested._sum.amountCents ?? 0) < 0) count += 1;
+  }
+  return count;
 }
 
 /**

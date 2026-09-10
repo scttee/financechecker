@@ -148,6 +148,7 @@ async function seedExternalAssets(): Promise<void> {
       {
         key: 'hostplus',
         name: 'Hostplus Indexed Growth',
+        kind: 'SUPER',
         provider: 'Hostplus',
         note: 'Super. Up cannot see this, so the balance is whatever was last entered by hand.',
         sortOrder: 0,
@@ -155,6 +156,7 @@ async function seedExternalAssets(): Promise<void> {
       {
         key: 'dhhf',
         name: 'DHHF',
+        kind: 'INVESTMENT',
         provider: 'Betashares Direct',
         note: 'Core long-term holding. Snapshots only — this app does not track market prices.',
         sortOrder: 1,

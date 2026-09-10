@@ -140,7 +140,7 @@ async function allocationsOverlapping(from: Date, to: Date): Promise<Map<Account
   return totals;
 }
 
-async function incomeIn(from: Date, to: Date): Promise<Cents> {
+export async function incomeIn(from: Date, to: Date): Promise<Cents> {
   const result = await prisma.transaction.aggregate({
     where: {
       createdAt: { gte: from, lt: to },
@@ -152,7 +152,7 @@ async function incomeIn(from: Date, to: Date): Promise<Cents> {
   return result._sum.amountCents ?? 0;
 }
 
-async function investedIn(from: Date, to: Date): Promise<Cents> {
+export async function investedIn(from: Date, to: Date): Promise<Cents> {
   const result = await prisma.transaction.aggregate({
     where: {
       createdAt: { gte: from, lt: to },
@@ -180,7 +180,7 @@ async function savedIn(from: Date, to: Date): Promise<Cents> {
   return total;
 }
 
-async function transfersInto(role: AccountRole, from: Date, to: Date): Promise<Cents> {
+export async function transfersInto(role: AccountRole, from: Date, to: Date): Promise<Cents> {
   const mappings = await prisma.accountRoleMapping.findMany({ where: { role } });
   if (mappings.length === 0) return 0;
 

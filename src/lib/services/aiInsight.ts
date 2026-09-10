@@ -97,7 +97,12 @@ export async function regenerateTodayAiInsight(): Promise<void> {
         ? {
             score: view.health.score,
             tier: view.health.tierLabel,
-            factors: view.health.factors.map((f) => ({ label: f.label, score: f.score, detail: f.detail })),
+            dimensions: view.health.dimensions.map((d) => ({
+              label: d.label,
+              points: d.points,
+              maxPoints: d.maxPoints,
+              factors: d.subFactors.map((f) => ({ label: f.label, points: f.points, detail: f.detail })),
+            })),
           }
         : null,
     safeToSpend: view.safeToSpend

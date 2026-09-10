@@ -1,14 +1,17 @@
 /**
- * Daily AI insight refresh.
+ * Daily refresh: AI insights, and one Financial Health score snapshot.
  *
  * A cron-scheduled Railway service hits this once a day with a bearer token
  * — not a session, so it is checked with the same constant-time comparison
  * discipline as the Up webhook signature, against CRON_SECRET rather than a
  * cookie. This is the only thing in the app that calls Claude without a
- * person pressing a button, and it is bounded to once a day on purpose:
- * three calls (Today's headline, this week's review, the planning
- * narrative), not a loop over every period, so the cost stays predictable
- * regardless of how the schedule fires.
+ * person pressing a button, and the AI calls are bounded to once a day on
+ * purpose: three of them (Today's headline, this week's review, the
+ * planning narrative), not a loop over every period, so the cost stays
+ * predictable regardless of how the schedule fires. The score snapshot is
+ * free (no AI, no external call) — it rides along here because "once a
+ * day" is exactly the cadence a trend line needs, and one cron is simpler
+ * than two.
  *
  * Exempt from the session gate for the same reason the webhook and health
  * check are — a cron job has no session to send.
@@ -23,6 +26,7 @@ import {
   regenerateReviewAiInsight,
   regenerateTodayAiInsight,
 } from '@/lib/services/aiInsight';
+import { recordDailyScoreSnapshot } from '@/lib/services/healthScoreHistory';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -68,6 +72,13 @@ export async function POST(request: Request) {
     results.planning = 'ok';
   } catch (error) {
     results.planning = error instanceof AiError ? error.userMessage : 'failed';
+  }
+
+  try {
+    const snapshot = await recordDailyScoreSnapshot();
+    results.scoreSnapshot = snapshot.ok ? `ok (${snapshot.score})` : 'skipped — not enough data yet';
+  } catch (error) {
+    results.scoreSnapshot = error instanceof Error ? error.message : 'failed';
   }
 
   return NextResponse.json({ ranAt: new Date().toISOString(), results });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeFinancialHealth } from '@/lib/domain/health';
+import { computeFinancialHealth, type ProtectionKind } from '@/lib/domain/health';
 import { calculateSafeToSpend } from '@/lib/domain/safeToSpend';
 import { categoryStatus, type CategoryLine } from '@/lib/domain/status';
 import type { AccountRole } from '@prisma/client';
@@ -26,201 +26,195 @@ function onTrackCategories(elapsedPct = 50): CategoryLine[] {
   ];
 }
 
-describe('financial health', () => {
-  it('scores full marks when every factor is clean', () => {
-    const categories = onTrackCategories();
-    const safeToSpend = calculateSafeToSpend({ categories, daysRemaining: 7 });
+const ALL_PROTECTION_KINDS: ProtectionKind[] = ['DEATH', 'TPD', 'INCOME_PROTECTION', 'HEALTH', 'BENEFICIARY'];
 
-    const health = computeFinancialHealth({
-      categories,
-      safeToSpend,
-      emergencyProgressPct: 100,
-      futureOptionsProgressPct: 100,
-    });
+function perfectInput() {
+  const categories = onTrackCategories();
+  const safeToSpend = calculateSafeToSpend({ categories, daysRemaining: 7 });
+  return {
+    categories,
+    safeToSpend,
+    emergencyProgressPct: 100,
+    futureOptionsProgressPct: 100,
+    survivalRunwayMonths: 6,
+    debtCents: 0,
+    investedThisCycleCents: 50_000,
+    plannedInvestingCents: 50_000,
+    recentCyclesWithContribution: 3,
+    freedomRatePct: 30,
+    freedomRateTargetPct: 25,
+    protectionItems: ALL_PROTECTION_KINDS.map((kind) => ({ kind, recorded: true, reviewedRecently: true })),
+    adminUpToDateCount: 6,
+    adminTotalCount: 6,
+  };
+}
 
+describe('financial health v2', () => {
+  it('scores a full 100 when every dimension is maxed', () => {
+    const health = computeFinancialHealth(perfectInput());
     expect(health.status).toBe('READY');
+    expect(health.scoreVersion).toBe(2);
     expect(health.score).toBe(100);
     expect(health.tier).toBe('THRIVING');
   });
 
-  it('drops the pace factor when categories are running hot or spent, not the others', () => {
-    const clean = onTrackCategories();
-    const safeToSpend = calculateSafeToSpend({ categories: clean, daysRemaining: 7 });
-    const baseline = computeFinancialHealth({
-      categories: clean,
-      safeToSpend,
-      emergencyProgressPct: 100,
-      futureOptionsProgressPct: 100,
-    });
-
-    const strained = clean.map((c) =>
-      c.role === 'DINING_SOCIAL' ? line('DINING_SOCIAL', 24_322, 24_322, 50) : c,
-    );
-    const strainedSafeToSpend = calculateSafeToSpend({ categories: strained, daysRemaining: 7 });
-    const withSpentCategory = computeFinancialHealth({
-      categories: strained,
-      safeToSpend: strainedSafeToSpend,
-      emergencyProgressPct: 100,
-      futureOptionsProgressPct: 100,
-    });
-
-    expect(withSpentCategory.score).toBeLessThan(baseline.score);
-    const paceFactor = withSpentCategory.factors.find((f) => f.key === 'PACE')!;
-    expect(paceFactor.score).toBeLessThan(100);
+  it('has exactly six dimensions whose max points sum to 100', () => {
+    const health = computeFinancialHealth(perfectInput());
+    expect(health.dimensions).toHaveLength(6);
+    const totalMax = health.dimensions.reduce((sum, d) => sum + d.maxPoints, 0);
+    expect(totalMax).toBe(100);
   });
 
-  it('never counts protected or reserved categories against pace', () => {
-    const categories = onTrackCategories();
-    const safeToSpend = calculateSafeToSpend({ categories, daysRemaining: 7 });
+  it('matches the suggested weighting: Cashflow/Resilience/Wealth Building 20 each, Optionality/Protection 15 each, Admin 10', () => {
+    const health = computeFinancialHealth(perfectInput());
+    const maxByKey = Object.fromEntries(health.dimensions.map((d) => [d.key, d.maxPoints]));
+    expect(maxByKey).toEqual({
+      CASHFLOW: 20,
+      RESILIENCE: 20,
+      WEALTH_BUILDING: 20,
+      OPTIONALITY: 15,
+      PROTECTION: 15,
+      ADMIN: 10,
+    });
+  });
+
+  it('every dimension is the sum of its own sub-factors', () => {
+    const health = computeFinancialHealth(perfectInput());
+    for (const d of health.dimensions) {
+      const subTotal = Math.round(d.subFactors.reduce((sum, f) => sum + f.points, 0) * 10) / 10;
+      expect(d.points).toBe(subTotal);
+    }
+  });
+
+  it('Resilience: no tracked debt is worth +4, debt drops it to 0, all-or-nothing like the spec example', () => {
+    const clean = computeFinancialHealth(perfectInput());
+    const withDebt = computeFinancialHealth({ ...perfectInput(), debtCents: 50_000 });
+
+    const cleanDebt = clean.dimensions.find((d) => d.key === 'RESILIENCE')!.subFactors.find((f) => f.key === 'NO_DEBT')!;
+    const debtFactor = withDebt.dimensions.find((d) => d.key === 'RESILIENCE')!.subFactors.find((f) => f.key === 'NO_DEBT')!;
+
+    expect(cleanDebt.points).toBe(4);
+    expect(debtFactor.points).toBe(0);
+    expect(withDebt.score).toBeLessThan(clean.score);
+  });
+
+  it('Resilience: survival runway scales toward the 3-month reference point and caps there', () => {
+    const short = computeFinancialHealth({ ...perfectInput(), survivalRunwayMonths: 1.5 });
+    const atTarget = computeFinancialHealth({ ...perfectInput(), survivalRunwayMonths: 3 });
+    const wellPast = computeFinancialHealth({ ...perfectInput(), survivalRunwayMonths: 12 });
+
+    const runwayPoints = (h: ReturnType<typeof computeFinancialHealth>) =>
+      h.dimensions.find((d) => d.key === 'RESILIENCE')!.subFactors.find((f) => f.key === 'SURVIVAL_RUNWAY')!.points;
+
+    expect(runwayPoints(short)).toBeLessThan(runwayPoints(atTarget));
+    expect(runwayPoints(atTarget)).toBe(6);
+    expect(runwayPoints(wellPast)).toBe(6); // capped, not unbounded
+  });
+
+  it('Resilience: with no spending history yet, survival runway is neutral rather than zero', () => {
+    const health = computeFinancialHealth({ ...perfectInput(), survivalRunwayMonths: null });
+    const runway = health.dimensions.find((d) => d.key === 'RESILIENCE')!.subFactors.find((f) => f.key === 'SURVIVAL_RUNWAY')!;
+    expect(runway.points).toBeGreaterThan(0);
+    expect(runway.points).toBeLessThan(6);
+  });
+
+  it('Wealth Building: reflects the actual investing rate, not just whether Future Options is funded', () => {
+    const noInvesting = computeFinancialHealth({
+      ...perfectInput(),
+      investedThisCycleCents: 0,
+      recentCyclesWithContribution: 0,
+    });
+    const full = computeFinancialHealth(perfectInput());
+
+    expect(noInvesting.dimensions.find((d) => d.key === 'WEALTH_BUILDING')!.points).toBe(0);
+    expect(full.dimensions.find((d) => d.key === 'WEALTH_BUILDING')!.points).toBe(20);
+    expect(noInvesting.score).toBeLessThan(full.score);
+  });
+
+  it('Optionality: Future Options and Freedom Rate are independent sub-factors', () => {
     const health = computeFinancialHealth({
-      categories,
-      safeToSpend,
-      emergencyProgressPct: 100,
+      ...perfectInput(),
       futureOptionsProgressPct: 100,
+      freedomRatePct: 0,
     });
-
-    const pace = health.factors.find((f) => f.key === 'PACE')!;
-    // Emergency and Future Options are protected, Bills is reserved; the
-    // remaining 5 discretionary-facing lines are what pace actually tracks.
-    expect(pace.detail).toContain('5 of 5');
+    const dim = health.dimensions.find((d) => d.key === 'OPTIONALITY')!;
+    expect(dim.subFactors.find((f) => f.key === 'FUTURE_OPTIONS_FUNDED')!.points).toBe(10);
+    expect(dim.subFactors.find((f) => f.key === 'FREEDOM_RATE')!.points).toBe(0);
   });
 
-  it('scores zero headroom when safe-to-spend would have gone negative', () => {
-    const categories = onTrackCategories().map((c) =>
-      c.role === 'DINING_SOCIAL' ? line('DINING_SOCIAL', 1_000, 50_000, 50) : c,
-    );
-    const safeToSpend = calculateSafeToSpend({ categories, daysRemaining: 7 });
-    expect(safeToSpend.flooredAtZero).toBe(true);
-
+  it('Protection: each item is worth up to 3 — 2 for recorded, 1 more for reviewed within a year', () => {
     const health = computeFinancialHealth({
-      categories,
-      safeToSpend,
-      emergencyProgressPct: 100,
-      futureOptionsProgressPct: 100,
+      ...perfectInput(),
+      protectionItems: [
+        { kind: 'DEATH', recorded: true, reviewedRecently: true },
+        { kind: 'TPD', recorded: true, reviewedRecently: false },
+        { kind: 'INCOME_PROTECTION', recorded: false, reviewedRecently: false },
+      ],
     });
-
-    const headroom = health.factors.find((f) => f.key === 'HEADROOM')!;
-    expect(headroom.score).toBe(0);
+    const dim = health.dimensions.find((d) => d.key === 'PROTECTION')!;
+    expect(dim.subFactors.find((f) => f.key === 'DEATH')!.points).toBe(3);
+    expect(dim.subFactors.find((f) => f.key === 'TPD')!.points).toBe(2);
+    expect(dim.subFactors.find((f) => f.key === 'INCOME_PROTECTION')!.points).toBe(0);
+    // Untracked kinds (HEALTH, BENEFICIARY) still appear, scored zero — nothing silently disappears.
+    expect(dim.subFactors).toHaveLength(5);
+    expect(dim.subFactors.find((f) => f.key === 'HEALTH')!.points).toBe(0);
   });
 
-  it('reflects Emergency coverage directly in its factor score', () => {
-    const categories = onTrackCategories();
-    const safeToSpend = calculateSafeToSpend({ categories, daysRemaining: 7 });
-
-    const half = computeFinancialHealth({
-      categories,
-      safeToSpend,
-      emergencyProgressPct: 50,
-      futureOptionsProgressPct: 100,
-    });
-
-    expect(half.factors.find((f) => f.key === 'EMERGENCY')!.score).toBe(50);
-  });
-
-  it('reflects Future Options coverage directly in its factor score, independent of Emergency', () => {
-    const categories = onTrackCategories();
-    const safeToSpend = calculateSafeToSpend({ categories, daysRemaining: 7 });
-
+  it('Protection never judges adequacy — a recorded-but-unreviewed item scores the same regardless of cover amount', () => {
+    // The domain function is never given a cover amount to judge in the first
+    // place; this just documents that recorded+unreviewed is worth 2 no
+    // matter what, since there is no threshold to compare against.
     const health = computeFinancialHealth({
-      categories,
-      safeToSpend,
-      emergencyProgressPct: 100,
-      futureOptionsProgressPct: 20,
+      ...perfectInput(),
+      protectionItems: [{ kind: 'DEATH', recorded: true, reviewedRecently: false }],
     });
-
-    const futureOptions = health.factors.find((f) => f.key === 'FUTURE_OPTIONS')!;
-    expect(futureOptions.score).toBe(20);
-    // A fully-funded Emergency does not mask a barely-started Future Options.
-    expect(health.score).toBeLessThan(100);
+    const death = health.dimensions.find((d) => d.key === 'PROTECTION')!.subFactors.find((f) => f.key === 'DEATH')!;
+    expect(death.points).toBe(2);
   });
 
-  it('weighs both goals, so the score reflects two goals rather than just one', () => {
-    const categories = onTrackCategories();
-    const safeToSpend = calculateSafeToSpend({ categories, daysRemaining: 7 });
-
-    const onlyEmergency = computeFinancialHealth({
-      categories,
-      safeToSpend,
-      emergencyProgressPct: 100,
-      futureOptionsProgressPct: 0,
-    });
-    const both = computeFinancialHealth({
-      categories,
-      safeToSpend,
-      emergencyProgressPct: 100,
-      futureOptionsProgressPct: 100,
-    });
-
-    expect(both.score).toBeGreaterThan(onlyEmergency.score);
+  it('Admin is one line, not six — the ratio of items up to date', () => {
+    const health = computeFinancialHealth({ ...perfectInput(), adminUpToDateCount: 3, adminTotalCount: 6 });
+    const admin = health.dimensions.find((d) => d.key === 'ADMIN')!;
+    expect(admin.subFactors).toHaveLength(1);
+    expect(admin.points).toBe(5);
   });
 
   it('answers "should I spend right now" from the same safe-to-spend figure, not a rival number', () => {
-    const categories = onTrackCategories();
-    const safeToSpend = calculateSafeToSpend({ categories, daysRemaining: 7 });
-
-    const health = computeFinancialHealth({
-      categories,
-      safeToSpend,
-      emergencyProgressPct: 100,
-      futureOptionsProgressPct: 100,
-    });
-
+    const input = perfectInput();
+    const health = computeFinancialHealth(input);
     expect(health.spendingGuidance).toContain(
-      `$${Math.round(safeToSpend.safeToSpendCents / 100)}`,
+      `$${Math.round(input.safeToSpend.safeToSpendCents / 100)}`,
     );
   });
 
-  it('tells you to hold off, calmly, when nothing discretionary is spare', () => {
-    const spent = onTrackCategories(50).map((c) =>
-      ['DINING_SOCIAL', 'FUN', 'GEAR_OBJECTS'].includes(c.role)
-        ? line(c.role, c.allocatedCents, c.allocatedCents, 50)
-        : c,
-    );
-    const safeToSpend = calculateSafeToSpend({ categories: spent, daysRemaining: 7 });
-    expect(safeToSpend.safeToSpendCents).toBe(0);
-
+  it('never produces a score or a sub-factor outside its own bounds', () => {
     const health = computeFinancialHealth({
-      categories: spent,
-      safeToSpend,
-      emergencyProgressPct: 100,
-      futureOptionsProgressPct: 100,
-    });
-
-    expect(health.spendingGuidance.toLowerCase()).toContain('hold off');
-    expect(health.spendingGuidance.toLowerCase()).not.toMatch(/bad|fail|overspent|warning/);
-  });
-
-  it('never produces a score outside 0-100', () => {
-    const categories = onTrackCategories();
-    const safeToSpend = calculateSafeToSpend({ categories, daysRemaining: 7 });
-
-    const health = computeFinancialHealth({
-      categories,
-      safeToSpend,
-      emergencyProgressPct: 250, // over target is possible; the factor must still clamp
-      futureOptionsProgressPct: -10, // defensive: never expect a negative progress figure either
+      ...perfectInput(),
+      emergencyProgressPct: 250,
+      futureOptionsProgressPct: -10,
+      freedomRatePct: 500,
+      recentCyclesWithContribution: 99,
+      adminUpToDateCount: 99,
+      adminTotalCount: 6,
     });
 
     expect(health.score).toBeGreaterThanOrEqual(0);
     expect(health.score).toBeLessThanOrEqual(100);
-    for (const factor of health.factors) {
-      expect(factor.score).toBeGreaterThanOrEqual(0);
-      expect(factor.score).toBeLessThanOrEqual(100);
+    for (const d of health.dimensions) {
+      expect(d.points).toBeGreaterThanOrEqual(0);
+      expect(d.points).toBeLessThanOrEqual(d.maxPoints);
+      for (const f of d.subFactors) {
+        expect(f.points).toBeGreaterThanOrEqual(0);
+        expect(f.points).toBeLessThanOrEqual(f.maxPoints);
+      }
     }
   });
 
-  it('weights sum to exactly 100%, so the score is never silently capped below 100', () => {
-    const categories = onTrackCategories();
-    const safeToSpend = calculateSafeToSpend({ categories, daysRemaining: 7 });
-
-    const health = computeFinancialHealth({
-      categories,
-      safeToSpend,
-      emergencyProgressPct: 100,
-      futureOptionsProgressPct: 100,
-    });
-
-    const totalWeight = health.factors.reduce((sum, f) => sum + f.weight, 0);
-    expect(totalWeight).toBeCloseTo(1, 5);
+  it('a market-style swing in isolation (freedom rate only) does not collapse the whole score', () => {
+    // Resilience, Wealth Building and the rest stay put even if this one
+    // behavioural input has a bad quarter — nothing here lets one number
+    // dominate the read the way a raw balance delta could.
+    const health = computeFinancialHealth({ ...perfectInput(), freedomRatePct: 0 });
+    expect(health.score).toBeGreaterThanOrEqual(95); // loses only the 5-point Freedom Rate sub-factor
   });
 });

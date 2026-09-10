@@ -188,6 +188,35 @@ enum AiInsightKind {
   REVIEW_MONTH
   REVIEW_SIX_MONTHS
   PLANNING
+  HEALTH_SUMMARY
+}
+
+/// What an ExternalAsset actually is, for the balance sheet split. Debt is
+/// stored as a positive amount owed and subtracted, never as a negative
+/// balance — a negative number in a "balance" field is exactly the kind of
+/// thing that gets summed wrong by accident.
+enum AssetKind {
+  INVESTMENT
+  SUPER
+  DEBT
+  OTHER
+}
+
+enum ProtectionKind {
+  DEATH
+  TPD
+  INCOME_PROTECTION
+  HEALTH
+  BENEFICIARY
+}
+
+enum AdminKind {
+  TAX_RETURN
+  SUPER_REVIEW
+  INSURANCE_REVIEW
+  BENEFICIARY_REVIEW
+  RECURRING_COST_REVIEW
+  ANNUAL_REVIEW
 }
 
 // ---------------------------------------------------------------------------
@@ -204,6 +233,12 @@ model Settings {
   rentCents                Int @default(134000) // $1,340 per fortnight
   emergencyTargetCents     Int @default(1200000) // $12,000
   futureOptionsTargetCents Int @default(1000000) // $10,000
+
+  /// Share of take-home income going toward future choice (Emergency while
+  /// below target, Future Options, long-term investing) that counts as
+  /// "full marks" for the Optionality dimension of the health score. Not a
+  /// judgement of what's correct — a configurable reference point.
+  freedomRateTargetPct Int @default(25)
 
   // Seeded from a typical payslip but never used in place of a real detected
   // salary. Only a fallback for projections when no salary has been seen yet.
@@ -486,12 +521,16 @@ model FinancialGoal {
   updatedAt   DateTime    @updatedAt
 }
 
-/// Manual snapshots of things Up cannot see — super, Betashares, etc.
+/// Manual snapshots of things Up cannot see — super, Betashares, debts, etc.
 /// The app never pretends to know live market values.
 model ExternalAsset {
   id        String                  @id @default(cuid())
   key       String                  @unique
   name      String
+  /// Determines which side of the balance sheet this sits on. Debt balances
+  /// are stored positive (amount owed) and subtracted at read time — see
+  /// domain/balanceSheet.ts.
+  kind      AssetKind               @default(INVESTMENT)
   provider  String?
   note      String?
   sortOrder Int                     @default(0)
@@ -708,4 +747,53 @@ model AiInsight {
   inputTokens  Int
   outputTokens Int
   generatedAt  DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Financial health — score history, protection, admin
+// ---------------------------------------------------------------------------
+
+/// One row per day, written by the daily cron alongside the AI insights.
+/// The score formula will change over time; a snapshot freezes what the
+/// formula said on that day so a trend line never gets silently rewritten
+/// by a later change to the weights. `dimensions` mirrors the shape
+/// domain/health.ts returns, stored as JSON because it is a point-in-time
+/// record, not something queried field-by-field.
+model FinancialHealthScoreSnapshot {
+  id           String   @id @default(cuid())
+  takenAt      DateTime @default(now())
+  scoreVersion Int
+  score        Int
+  dimensions   Json
+
+  @@index([takenAt])
+}
+
+/// Manually tracked, one row per kind. Cover amounts are never invented —
+/// null until entered by hand.
+model ProtectionItem {
+  id            String         @id @default(cuid())
+  kind          ProtectionKind @unique
+  provider      String?
+  coverCents    Int?
+  premiumCents  Int?
+  waitingPeriod String?
+  benefitPeriod String?
+  lastReviewed  DateTime?
+  nextReview    DateTime?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+/// Deliberately not a task manager: one row per kind, last completed / next
+/// due, nothing else.
+model AdminItem {
+  id            String    @id @default(cuid())
+  kind          AdminKind @unique
+  lastCompleted DateTime?
+  nextDue       DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
