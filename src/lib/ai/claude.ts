@@ -102,11 +102,12 @@ House style, followed exactly:
 - Never scold, never call anything overspent, blown, bad, or a mistake. "Worth noticing" is as strong as this app gets.
 - Discretionary spending and a slow-moving goal are never a failing — a rate, not a verdict.
 - Never invent a number, a date, or a fact not present in the JSON. If something needed to answer a section is missing from the JSON, write exactly "Not enough data yet." for that section rather than guessing or extrapolating.
-- Never assume causation between two figures unless the JSON explicitly says one caused the other.
+- Never assume causation between two figures unless the JSON explicitly says one caused the other. This applies most of all to moneyFeels: if the objective score and the subjective "how money feels" score move in different directions, describe both movements plainly and do not suggest one caused the other or that either is more "correct".
+- If a strategyStatement is present in the JSON, you may note in worthNoticing when something in the figures looks inconsistent with it — but only ever a plain observation ("this appears inconsistent with..."), never phrased as a rule being broken, and never if nothing looks inconsistent.
 - Plain English, no jargon, no bullet points inside a section, no emoji, no exclamation marks.
 
 Respond with exactly this JSON shape and nothing else — no markdown fences, no commentary. Each value is one to three short sentences, or exactly "Not enough data yet.":
-{"whatChanged": "...", "goingWell": "...", "worthNoticing": "...", "bestNextMove": "...", "context": "..."}`;
+{"whatChanged": "...", "goingWell": "...", "worthNoticing": "...", "bestNextMove": "...", "context": "...", "moneyFeelsNote": "..."}`;
 
 function extractText(response: Anthropic.Message): string {
   const block = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
@@ -201,6 +202,7 @@ export interface HealthSummary {
   worthNoticing: string;
   bestNextMove: string;
   context: string;
+  moneyFeelsNote: string;
 }
 
 const HEALTH_SUMMARY_KEYS: (keyof HealthSummary)[] = [
@@ -209,6 +211,7 @@ const HEALTH_SUMMARY_KEYS: (keyof HealthSummary)[] = [
   'worthNoticing',
   'bestNextMove',
   'context',
+  'moneyFeelsNote',
 ];
 
 function parseHealthSummaryJson(text: string): HealthSummary {

@@ -9,7 +9,9 @@ import { getProtectionItems, PROTECTION_KINDS } from '@/lib/services/protection'
 import { getAdminItems, ADMIN_KINDS } from '@/lib/services/admin';
 import { getGoalPlans } from '@/lib/services/planning';
 import { getHealthAiSummary } from '@/lib/services/aiInsight';
-import { getSettings } from '@/lib/services/settings';
+import { getSettings, strategyStatementOf } from '@/lib/services/settings';
+import { getWellbeingHistory } from '@/lib/services/wellbeing';
+import { WELLBEING_DIMENSIONS } from '@/lib/domain/wellbeing';
 import { configStatus } from '@/lib/env';
 import { selectBestNextAction } from '@/lib/domain/bestNextAction';
 import { formatCents } from '@/lib/money';
@@ -29,6 +31,7 @@ import { FinancialHealthCard } from '@/components/FinancialHealth';
 import {
   regenerateHealthInsightAction,
   saveAdminItemAction,
+  saveWellbeingCheckinAction,
   saveProtectionItemAction,
 } from '@/app/actions';
 
@@ -58,6 +61,7 @@ export default async function HealthPage({
     plans,
     aiSummary,
     settings,
+    wellbeingHistory,
   ] = await Promise.all([
     getTodayView(now),
     getScoreTrend(now),
@@ -69,7 +73,9 @@ export default async function HealthPage({
     getGoalPlans(now),
     getHealthAiSummary(),
     getSettings(),
+    getWellbeingHistory(2),
   ]);
+  const [latestWellbeing, previousWellbeing] = wellbeingHistory;
 
   const status = configStatus();
   const { health } = view;
@@ -115,6 +121,14 @@ export default async function HealthPage({
         ) : null}
       </Card>
 
+      {/* Strategy. Context, never a gate. */}
+      <Card>
+        <CardHeader title="Strategy" hint="Editable in Settings." />
+        <p className="whitespace-pre-line text-sm leading-relaxed text-muted">
+          {strategyStatementOf(settings)}
+        </p>
+      </Card>
+
       {/* Claude's read, once generated. */}
       {status.aiConfigured || aiSummary ? (
         <Card>
@@ -141,6 +155,12 @@ export default async function HealthPage({
                 <p className="text-xs font-medium uppercase tracking-[0.06em] text-faint">Context</p>
                 <p className="mt-0.5">{aiSummary.context}</p>
               </div>
+              {aiSummary.moneyFeelsNote && aiSummary.moneyFeelsNote !== 'Not enough data yet.' ? (
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.06em] text-faint">How money feels</p>
+                  <p className="mt-0.5">{aiSummary.moneyFeelsNote}</p>
+                </div>
+              ) : null}
               <p className="text-xs text-faint">
                 Generated {formatDateTime(aiSummary.generatedAt, settings.timezone)} · {aiSummary.model} · about{' '}
                 {aiSummary.costCents < 1 ? '<1¢' : `${Math.round(aiSummary.costCents)}¢`}
@@ -425,6 +445,67 @@ export default async function HealthPage({
             </li>
           ))}
         </ul>
+      </Card>
+
+      {/* How money feels. Deliberately separate from the score above — a
+          subjective check-in, never averaged into it. */}
+      <Card>
+        <CardHeader
+          title="How money feels"
+          hint="A quarterly check-in, separate from the score above. Never averaged together."
+        />
+
+        {latestWellbeing ? (
+          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+            <div>
+              <p className="text-sm text-muted">Money feels</p>
+              <p className="tabular text-figure-sm">{latestWellbeing.composite}</p>
+            </div>
+            {health.status === 'READY' ? (
+              <div>
+                <p className="text-sm text-muted">Financial Health</p>
+                <p className="tabular text-figure-sm">{health.score}</p>
+              </div>
+            ) : null}
+            <p className="text-xs text-faint">
+              Last taken {formatDate(latestWellbeing.takenAt, settings.timezone)}
+              {previousWellbeing
+                ? ` · was ${previousWellbeing.composite} on ${formatDate(previousWellbeing.takenAt, settings.timezone)}`
+                : ''}
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-muted">Not checked in yet.</p>
+        )}
+
+        <details className="group mt-3">
+          <summary className="text-sm font-medium text-accent hover:underline">
+            {latestWellbeing ? 'Check in again' : 'Check in'}
+          </summary>
+          <form action={saveWellbeingCheckinAction} className="mt-2 space-y-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {WELLBEING_DIMENSIONS.map((dim) => (
+                <Field key={dim.key} label={dim.label} htmlFor={`wb-${dim.key}`}>
+                  <Input
+                    id={`wb-${dim.key}`}
+                    name={dim.key}
+                    type="number"
+                    min={1}
+                    max={10}
+                    defaultValue={latestWellbeing ? latestWellbeing[dim.key] : 5}
+                    required
+                  />
+                </Field>
+              ))}
+            </div>
+            <Field label="Notes" htmlFor="wb-notes">
+              <Input id="wb-notes" name="notes" placeholder="Optional" />
+            </Field>
+            <Button type="submit" variant="secondary">
+              Save check-in
+            </Button>
+          </form>
+        </details>
       </Card>
     </div>
   );

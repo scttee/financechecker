@@ -23,6 +23,21 @@ import type { RecurringSettings } from '@/lib/domain/recurring';
 
 export const SETTINGS_ID = 1;
 
+export const DEFAULT_STRATEGY_STATEMENT = `Use cash for near-term life options, broad diversified investments for long-term accessible wealth and super for retirement.
+
+Protect Emergency.
+
+Fund travel deliberately.
+
+Keep Gear within its dedicated allocation.
+
+Increase future assets as income rises rather than allowing lifestyle spending to automatically absorb every salary increase.`;
+
+/** Falls back to the default text rather than needing a migration backfill for an already-seeded Settings row. */
+export function strategyStatementOf(settings: Settings): string {
+  return settings.strategyStatement ?? DEFAULT_STRATEGY_STATEMENT;
+}
+
 /**
  * Load settings, creating the row with defaults on first call.
  *

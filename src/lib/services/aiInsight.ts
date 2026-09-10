@@ -37,7 +37,8 @@ import { getScoreTrend } from './healthScoreHistory';
 import { getBalanceSheet } from './balanceSheet';
 import { getFreedomRate } from './freedomRate';
 import { getRunway } from './runway';
-import { getSettings } from './settings';
+import { getSettings, strategyStatementOf } from './settings';
+import { getWellbeingHistory } from './wellbeing';
 
 export { AiError };
 
@@ -306,7 +307,7 @@ export async function getHealthAiSummary(): Promise<HealthAiSummary | null> {
 
 export async function regenerateHealthAiSummary(): Promise<void> {
   const now = new Date();
-  const [view, trend, balanceSheet, freedomRate, runway, plans, settings] = await Promise.all([
+  const [view, trend, balanceSheet, freedomRate, runway, plans, settings, wellbeingHistory] = await Promise.all([
     getTodayView(now),
     getScoreTrend(now),
     getBalanceSheet(),
@@ -314,9 +315,11 @@ export async function regenerateHealthAiSummary(): Promise<void> {
     getRunway(now),
     getGoalPlans(now),
     getSettings(),
+    getWellbeingHistory(2),
   ]);
 
   const previousScore = trend?.oneMonthAgo?.score ?? null;
+  const [latestWellbeing, previousWellbeing] = wellbeingHistory;
 
   const context = {
     financialHealthScore: view.health.status === 'READY' ? view.health.score : null,
@@ -351,11 +354,20 @@ export async function regenerateHealthAiSummary(): Promise<void> {
       reached: g.reachedAt !== null,
       projectedDate: g.projection.projectedDate ? g.projection.projectedDate.toISOString().slice(0, 10) : null,
     })),
+    strategyStatement: strategyStatementOf(settings),
+    moneyFeels: latestWellbeing
+      ? {
+          composite: latestWellbeing.composite,
+          takenAt: latestWellbeing.takenAt.toISOString().slice(0, 10),
+          previousComposite: previousWellbeing?.composite ?? null,
+        }
+      : null,
   };
 
   const result = await generateHealthSummary(context);
-  const { whatChanged, goingWell, worthNoticing, bestNextMove, context: contextText, ...usage } = result;
-  const summaryJson = { whatChanged, goingWell, worthNoticing, bestNextMove, context: contextText };
+  const { whatChanged, goingWell, worthNoticing, bestNextMove, context: contextText, moneyFeelsNote, ...usage } =
+    result;
+  const summaryJson = { whatChanged, goingWell, worthNoticing, bestNextMove, context: contextText, moneyFeelsNote };
 
   await prisma.aiInsight.upsert({
     where: { kind: 'HEALTH_SUMMARY' },

@@ -1,7 +1,13 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/db';
 import { appUrl, configStatus } from '@/lib/env';
-import { getAllocationPercents, getMerchantRules, getSalaryRules, getSettings } from '@/lib/services/settings';
+import {
+  getAllocationPercents,
+  getMerchantRules,
+  getSalaryRules,
+  getSettings,
+  strategyStatementOf,
+} from '@/lib/services/settings';
 import { validateAllocation } from '@/lib/domain/phases';
 import { allRoleDefinitions, roleLabel } from '@/lib/domain/roles';
 import { SUGGESTED_TAGS } from '@/lib/domain/merchantRules';
@@ -15,6 +21,7 @@ import {
   Notice,
   Pill,
   Select,
+  Textarea,
   Why,
 } from '@/components/ui';
 import {
@@ -25,6 +32,7 @@ import {
   saveMerchantRuleAction,
   saveSalaryRuleAction,
   saveSettingsAction,
+  saveStrategyStatementAction,
 } from '@/app/actions';
 
 export const dynamic = 'force-dynamic';
@@ -196,6 +204,26 @@ export default async function SettingsPage({
               </p>
             </Why>
           </div>
+        </Card>
+      ) : null}
+
+      {tab === 'plan' ? (
+        <Card>
+          <CardHeader
+            title="Strategy"
+            hint="Shown on Health for context. Claude may note when something looks inconsistent with it — it never blocks anything."
+          />
+          <form action={saveStrategyStatementAction} className="space-y-2">
+            <Textarea
+              name="strategyStatement"
+              rows={8}
+              defaultValue={strategyStatementOf(settings)}
+              aria-label="Strategy statement"
+            />
+            <Button type="submit" variant="secondary">
+              Save
+            </Button>
+          </form>
         </Card>
       ) : null}
 

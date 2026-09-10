@@ -240,6 +240,10 @@ model Settings {
   /// judgement of what's correct — a configurable reference point.
   freedomRateTargetPct Int @default(25)
 
+  /// Editable, shown on Health for context. The app can note when behaviour
+  /// looks inconsistent with this; it never blocks anything on it.
+  strategyStatement String?
+
   // Seeded from a typical payslip but never used in place of a real detected
   // salary. Only a fallback for projections when no salary has been seen yet.
   typicalSalaryCents Int           @default(438031)
@@ -799,4 +803,22 @@ model AdminItem {
   notes         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+}
+
+/// A quarterly, subjective check-in. Deliberately separate from the
+/// objective Financial Health score — this is how money feels, not a
+/// seventh scoring dimension, and the two are never averaged together.
+/// Each dimension is 1-10, by hand.
+model WellbeingCheckin {
+  id              String   @id @default(cuid())
+  takenAt         DateTime @default(now())
+  control         Int
+  security        Int
+  freedom         Int
+  confidence      Int
+  shockAbsorption Int
+  enjoyment       Int
+  notes           String?
+
+  @@index([takenAt])
 }

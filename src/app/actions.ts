@@ -29,7 +29,8 @@ import { runSync, classifyTransactions, rebuildPayCycles, checkPhaseAndMilestone
 import { setLeakageVerdict } from '@/lib/services/leakageService';
 import { setRecurringStatus } from '@/lib/services/recurringService';
 import { dismissAllReviewItems, dismissReviewItem } from '@/lib/services/reviewItems';
-import { getAllocationPercents, getSettings } from '@/lib/services/settings';
+import { getAllocationPercents, getSettings, SETTINGS_ID } from '@/lib/services/settings';
+import { saveWellbeingCheckin } from '@/lib/services/wellbeing';
 import { syncNotionWishlist } from '@/lib/services/wishlist';
 import {
   AiError,
@@ -685,4 +686,40 @@ export async function recordPurchaseDecisionAction(formData: FormData) {
   if (!id || !status) return;
   await prisma.wishlistItem.update({ where: { id }, data: { status } });
   revalidatePath('/shopping');
+}
+
+// ---------------------------------------------------------------------------
+// How money feels, and strategy
+// ---------------------------------------------------------------------------
+
+function parseRating(formData: FormData, field: string): number {
+  const raw = Number(formData.get(field));
+  if (!Number.isFinite(raw)) return 5;
+  return Math.max(1, Math.min(10, Math.round(raw)));
+}
+
+export async function saveWellbeingCheckinAction(formData: FormData) {
+  await requireSession();
+
+  await saveWellbeingCheckin({
+    control: parseRating(formData, 'control'),
+    security: parseRating(formData, 'security'),
+    freedom: parseRating(formData, 'freedom'),
+    confidence: parseRating(formData, 'confidence'),
+    shockAbsorption: parseRating(formData, 'shockAbsorption'),
+    enjoyment: parseRating(formData, 'enjoyment'),
+    notes: parseOptionalText(formData, 'notes'),
+  });
+
+  revalidatePath('/health');
+}
+
+export async function saveStrategyStatementAction(formData: FormData) {
+  await requireSession();
+  const text = String(formData.get('strategyStatement') ?? '').trim();
+  await prisma.settings.update({
+    where: { id: SETTINGS_ID },
+    data: { strategyStatement: text || null },
+  });
+  revalidateAll();
 }
