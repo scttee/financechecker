@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   BarChart3,
   CalendarRange,
+  Compass,
   HeartPulse,
   Home,
   Menu,
@@ -17,11 +18,12 @@ import { cn } from '@/lib/cn';
 
 const ITEMS = [
   { href: '/today', label: 'Today', Icon: Home },
+  { href: '/health', label: 'Health', Icon: HeartPulse },
+  { href: '/plan', label: 'Your future', Icon: Compass },
   { href: '/pay-cycle', label: 'Pay cycle', Icon: CalendarRange },
   { href: '/goals', label: 'Goals', Icon: Target },
-  { href: '/shopping', label: 'Shopping', Icon: ShoppingBag },
   { href: '/review', label: 'Review', Icon: BarChart3 },
-  { href: '/health', label: 'Health', Icon: HeartPulse },
+  { href: '/shopping', label: 'Shopping', Icon: ShoppingBag },
   { href: '/transactions', label: 'Transactions', Icon: Receipt },
   { href: '/settings', label: 'Settings', Icon: Settings },
 ] as const;
@@ -65,12 +67,12 @@ export function Nav({ reviewCount }: { reviewCount: number }) {
             </li>
           ))}
           <li className="relative flex-1">
-            <details className="group" key={pathname}>
+            <details className="group" key={pathname} onKeyDown={(event) => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); } }}>
               <summary className={cn('flex flex-col items-center gap-0.5 py-2 text-xs font-medium', ITEMS.slice(4).some(({ href }) => isActive(href)) ? 'text-accent' : 'text-muted')}>
                 <Menu className="h-5 w-5" aria-hidden />
                 More{reviewCount > 0 ? <span className="sr-only">, {reviewCount} items to review</span> : null}
               </summary>
-              <div className="absolute bottom-full right-0 mb-3 w-56 rounded-card border border-line bg-card p-2 shadow-lg">
+              <div className="absolute bottom-full right-0 mb-3 max-h-[65dvh] w-60 overflow-y-auto rounded-card border border-line bg-card p-2 shadow-lg">
                 <p className="px-3 py-2 text-xs font-semibold text-muted">More destinations</p>
                 {ITEMS.slice(4).map(({ href, label, Icon }) => (
                   <Link key={href} href={href} aria-current={isActive(href) ? 'page' : undefined} className={cn('flex min-h-12 items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium', isActive(href) ? 'bg-accent-soft text-accent' : 'text-ink hover:bg-track')}>

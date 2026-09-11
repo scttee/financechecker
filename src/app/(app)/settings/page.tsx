@@ -16,6 +16,7 @@ import {
   Button,
   Card,
   CardHeader,
+  PageTitle,
   Field,
   Input,
   Notice,
@@ -67,20 +68,16 @@ export default async function SettingsPage({
   const money = (cents: number) => (cents / 100).toFixed(2);
 
   return (
-    <div className="space-y-3">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="mt-1 text-sm text-muted">
-          Every financial assumption this app makes lives here, not in its source code.
-        </p>
-      </header>
+    <div className="space-y-5">
+      <PageTitle sub="Your financial system, shaped around the life you want.">Settings</PageTitle>
 
-      <div className="-mx-1 flex gap-1 overflow-x-auto pb-1">
+      <div className="flex gap-1 overflow-x-auto rounded-2xl border border-line bg-card p-1.5" role="navigation" aria-label="settings options">
         {TABS.map((t) => (
           <Link
             key={t.key}
+            aria-current={t.key === tab ? "page" : undefined}
             href={`/settings?tab=${t.key}`}
-            className={`shrink-0 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors ${
+            className={`inline-flex min-h-11 shrink-0 items-center rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${
               t.key === tab ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-track hover:text-ink'
             }`}
           >

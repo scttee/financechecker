@@ -9,6 +9,7 @@ import {
   Button,
   Card,
   CardHeader,
+  PageTitle,
   Empty,
   KeyValue,
   LinkButton,
@@ -50,15 +51,17 @@ export default async function PayCyclePage({
   const isCurrent = cycles[0]?.id === view.id;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
+      <PageTitle sub="Know what is available, what is committed, and how this pay is working for you.">Pay cycle</PageTitle>
       {/* Cycle picker. */}
       {cycles.length > 1 ? (
-        <div className="-mx-1 flex gap-1 overflow-x-auto pb-1">
+        <div className="flex gap-1 overflow-x-auto rounded-2xl border border-line bg-card p-1.5" role="navigation" aria-label="pay cycle options">
           {cycles.map((cycle, index) => (
             <Link
               key={cycle.id}
+              aria-current={cycle.id === view.id ? "page" : undefined}
               href={`/pay-cycle?cycle=${cycle.id}`}
-              className={`shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+              className={`inline-flex min-h-11 shrink-0 items-center rounded-xl px-4 py-2.5 text-xs font-medium transition-colors ${
                 cycle.id === view.id
                   ? 'bg-accent-soft text-accent'
                   : 'text-muted hover:bg-track hover:text-ink'

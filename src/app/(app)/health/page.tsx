@@ -1,4 +1,7 @@
 import Link from 'next/link';
+import { prisma } from '@/lib/db';
+import { ScoreHistory } from '@/components/ScoreHistory';
+import { HealthDimensions } from '@/components/HealthDimensions';
 import { getTodayView, recentCyclesWithInvesting } from '@/lib/services/overview';
 import { projectGoal } from '@/lib/domain/projection';
 import { getScoreTrend } from '@/lib/services/healthScoreHistory';
@@ -20,6 +23,7 @@ import {
   Button,
   Card,
   CardHeader,
+  PageTitle,
   Field,
   Input,
   Money,
@@ -77,6 +81,11 @@ export default async function HealthPage({
   ]);
   const [latestWellbeing, previousWellbeing] = wellbeingHistory;
 
+  const scoreHistory = await prisma.financialHealthScoreSnapshot.findMany({
+    where: { scoreVersion: 2, takenAt: { gte: new Date(now.getTime() - 180 * 86_400_000) } },
+    orderBy: { takenAt: 'asc' },
+    select: { takenAt: true, score: true },
+  });
   const status = configStatus();
   const { health } = view;
 
@@ -96,14 +105,22 @@ export default async function HealthPage({
   });
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
+      <PageTitle sub="See the whole picture. Notice your trends. Choose one useful next step.">Financial health</PageTitle>
       {params.aiError ? (
         <Notice tone="notice" title="Claude did not answer">
           <p>{params.aiError}</p>
         </Notice>
       ) : null}
 
-      {health.status === 'READY' ? <FinancialHealthCard health={health} trend={trend} /> : null}
+      <nav aria-label="Health sections" className="flex flex-wrap gap-2">
+        {[['health-overview', 'Overview'], ['health-trends', 'Trends'], ['health-balance', 'Balances'], ['health-runway', 'Runway'], ['health-protection', 'Protection'], ['health-wellbeing', 'Check-in']].map(([id, label]) => <Link key={id} href={`#${id}`} className="inline-flex min-h-11 items-center rounded-full border border-line bg-card px-4 text-sm font-medium text-muted hover:text-ink">{label}</Link>)}
+      </nav>
+      <div id="health-overview">
+        {health.status === 'READY' ? <FinancialHealthCard health={health} trend={trend} /> : <Notice title={health.headline}>{health.detail}</Notice>}
+      </div>
+      {health.status === 'READY' ? <HealthDimensions health={health} /> : null}
+      <div id="health-trends"><ScoreHistory timezone={settings.timezone} today={now.toISOString()} points={scoreHistory.map((p) => ({ date: p.takenAt.toISOString(), score: p.score }))} /></div>
 
       {/* Best next action. One, not twelve. */}
       <Card className="border-l-[3px]">
@@ -116,7 +133,7 @@ export default async function HealthPage({
         <p className="mt-1 text-sm leading-relaxed text-muted">{bestNextAction.detail}</p>
         {bestNextAction.href ? (
           <Link href={bestNextAction.href} className="mt-2 inline-block text-sm font-medium text-accent hover:underline">
-            Look
+            View next step
           </Link>
         ) : null}
       </Card>
@@ -180,9 +197,9 @@ export default async function HealthPage({
       ) : null}
 
       {/* Balance sheet. */}
-      <Card>
+      <Card id="health-balance">
         <CardHeader title="Balance sheet" hint="Cash from Up, everything else from manual snapshots on Goals." />
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-5 sm:grid-cols-2">
           <div>
             <p className="text-sm text-muted">Net financial assets</p>
             <p className="tabular text-figure-sm">{formatCents(balanceSheet.netFinancialAssetsCents, { showCents: false })}</p>
@@ -213,7 +230,7 @@ export default async function HealthPage({
           title="Freedom rate"
           hint="Share of take-home income directed toward future choice — Emergency while below target, Future Options, long-term investing."
         />
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid gap-5 sm:grid-cols-3">
           <div>
             <p className="text-xs uppercase tracking-[0.08em] text-muted">This cycle</p>
             <p className="tabular mt-1 text-figure-sm">{freedomRate.cycle.pct}%</p>
@@ -234,7 +251,7 @@ export default async function HealthPage({
       </Card>
 
       {/* Runway. */}
-      <Card>
+      <Card id="health-runway">
         <CardHeader title="Runway" hint="Emergency stays a protected floor — a career break only ever draws on Future Options." />
         <ul className="divide-y divide-line">
           <li className="flex items-baseline justify-between gap-3 py-2">
@@ -266,6 +283,8 @@ export default async function HealthPage({
           </p>
         ) : null}
       </Card>
+
+      <Card className="spend-hero"><CardHeader title="Make room for a career break" hint="Choose a start date and explore how contributions change what is possible." /><Link href="/plan" className="inline-flex min-h-11 items-center text-sm font-semibold text-accent">Open your future plan →</Link></Card>
 
       {/* Goal trajectories. */}
       {plans.filter((p) => !p.reachedAt).length > 0 ? (
@@ -317,7 +336,7 @@ export default async function HealthPage({
       ) : null}
 
       {/* Protection. */}
-      <Card>
+      <Card id="health-protection">
         <CardHeader title="Protection" hint="Tracked by hand. Cover amounts are never assumed." />
         <ul className="divide-y divide-line">
           {protectionItems.map((item) => (
@@ -449,7 +468,7 @@ export default async function HealthPage({
 
       {/* How money feels. Deliberately separate from the score above — a
           subjective check-in, never averaged into it. */}
-      <Card>
+      <Card id="health-wellbeing">
         <CardHeader
           title="How money feels"
           hint="A quarterly check-in, separate from the score above. Never averaged together."

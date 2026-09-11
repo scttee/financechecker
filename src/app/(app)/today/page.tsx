@@ -188,6 +188,8 @@ export default async function TodayPage({
         ) : null}
       </Card>
 
+      <Card className="spend-hero"><CardHeader title="Your future, in focus" hint="What would a career break look like? Explore a timeline that keeps Emergency protected." /><LinkButton href="/plan">Explore your future</LinkButton></Card>
+
       {/* Goals. */}
       <div className="grid gap-3 sm:grid-cols-2">
         {view.goals.map((goal) => (

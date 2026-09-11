@@ -15,6 +15,7 @@ import {
   Button,
   Card,
   CardHeader,
+  PageTitle,
   Money,
   Notice,
   Pill,
@@ -74,13 +75,15 @@ export default async function ReviewPage({
   );
 
   return (
-    <div className="space-y-3">
-      <div className="-mx-1 flex gap-1 overflow-x-auto pb-1">
+    <div className="space-y-5">
+      <PageTitle sub="A moment to notice what changed and make space for what comes next.">Your review</PageTitle>
+      <div className="flex gap-1 overflow-x-auto rounded-2xl border border-line bg-card p-1.5" role="navigation" aria-label="review options">
         {PERIODS.map((p) => (
           <Link
             key={p}
+            aria-current={p === period ? "page" : undefined}
             href={`/review?period=${p}`}
-            className={`shrink-0 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors ${
+            className={`inline-flex min-h-11 shrink-0 items-center rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${
               p === period ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-track hover:text-ink'
             }`}
           >
@@ -96,7 +99,7 @@ export default async function ReviewPage({
           hint={`${formatDate(review.from, settings.timezone)} to ${formatDate(review.to, settings.timezone)}`}
         />
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid gap-5 sm:grid-cols-3">
           <div>
             <p className="text-xs uppercase tracking-[0.08em] text-muted">Spent</p>
             <p className="tabular mt-1 text-figure-sm">

@@ -44,10 +44,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             ) : null}
           </div>
 
-          <div className="hidden flex-1 sm:block">
-            <Nav reviewCount={reviewCount} />
-          </div>
-
           <div className="ml-auto flex items-center gap-1">
             <SyncButton />
             <form action={signOutAction}>
@@ -60,6 +56,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </form>
           </div>
         </div>
+        <div className="mx-auto hidden max-w-wide px-5 pb-3 sm:block"><Nav reviewCount={reviewCount} /></div>
       </header>
 
       <main id="main-content" tabIndex={-1} className="mx-auto max-w-wide px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-7 sm:px-6 sm:pb-12 sm:pt-10">{children}</main>

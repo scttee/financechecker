@@ -596,3 +596,25 @@ Stated plainly rather than buried.
 Built against the official
 [Up OpenAPI specification](https://github.com/up-banking/api). No endpoint in
 this codebase was invented.
+
+
+## Career-break planning and health trends
+
+**Your future** (`/plan`) connects the current Future Options balance to a saved
+career-break scenario: start date, monthly costs, duration, contributions,
+one-off costs and return-to-work buffer. The projection counts calendar paydays
+before the break and stops contributions when it starts. It shows the funding
+gap, required contribution, earliest funded start (within 20 years), and monthly
+fund balances. Emergency and other balances are excluded.
+
+The initial living-cost estimate uses the existing trailing three-month
+normal-life spending average; incomplete history is flagged. Review this estimate
+for your intended break. Contributions and costs remain constant in the scenario;
+interest, investment returns, inflation and tax changes are not modelled. Saving
+assumptions never changes bank allocations. One personal scenario is stored in
+`CareerBreakPlan`; apply the included additive migration with
+`npx prisma migrate deploy` before running the updated app.
+
+Health now displays all six score dimensions and selectable 1/3/6-month history
+from recorded version-2 snapshots. Fewer than two observations produce an explicit
+empty state. Charts also expose their numbers in accessible tables.

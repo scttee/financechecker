@@ -822,3 +822,15 @@ model WellbeingCheckin {
 
   @@index([takenAt])
 }
+
+// One personal scenario. It records assumptions, never changes bank allocations.
+model CareerBreakPlan {
+  id               String   @id @default("personal")
+  startDate        String
+  durationMonths   Int
+  monthlyCostCents Int
+  perCycleCents    Int
+  upfrontCents     Int
+  bufferMonths    Int
+  updatedAt       DateTime @updatedAt
+}

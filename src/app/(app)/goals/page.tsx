@@ -9,10 +9,12 @@ import {
   Button,
   Card,
   CardHeader,
+  PageTitle,
   Field,
   Figure,
   Input,
   Money,
+  LinkButton,
   Notice,
   Pill,
   Progress,
@@ -55,12 +57,15 @@ export default async function GoalsPage({
   ]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
+      <PageTitle sub="The things you’re building toward, and the progress that makes them possible.">Goals & balances</PageTitle>
       {params.aiError ? (
         <Notice tone="notice" title="Claude did not answer">
           <p>{params.aiError}</p>
         </Notice>
       ) : null}
+
+      <Card className="spend-hero"><CardHeader title="What could your savings make possible?" hint="Turn Future Options into a career-break timeline, with living costs and a buffer." /><LinkButton href="/plan" variant="primary">Explore your future</LinkButton></Card>
 
       {/* Planning. When each goal is funded at the plan's current rate —
           the forward-looking question the rest of this page doesn't answer,
@@ -89,6 +94,7 @@ export default async function GoalsPage({
         </Card>
       ) : null}
 
+      <div className="grid items-start gap-5 md:grid-cols-2">
       {goals.map((goal) => {
         const balance = balances.get(goal.role) ?? 0;
         const pct = goal.targetCents > 0 ? Math.min(100, Math.round((balance / goal.targetCents) * 100)) : 0;
@@ -159,6 +165,7 @@ export default async function GoalsPage({
         );
       })}
 
+      </div>
       {/* Purpose-built Savers. */}
       <div className="grid gap-3 sm:grid-cols-2">
         <Card>
@@ -251,7 +258,7 @@ export default async function GoalsPage({
                           {change !== null ? (
                             <>
                               {' · '}
-                              <span className={change >= 0 ? 'text-ontrack' : 'text-notice'}>
+                              <span className={(asset.kind === 'DEBT' ? change <= 0 : change >= 0) ? 'text-ontrack' : 'text-notice'}>
                                 {formatCents(change, { showSign: true, showCents: false })}
                               </span>
                             </>

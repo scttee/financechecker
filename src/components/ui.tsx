@@ -6,7 +6,7 @@
  * figures, and a "Why?" disclosure available anywhere a number is calculated.
  */
 
-import type { ReactNode } from 'react';
+import { cloneElement, isValidElement, type ReactNode, type ReactElement } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/cn';
 import { formatCents } from '@/lib/money';
@@ -52,7 +52,7 @@ export function CardHeader({
   return (
     <div className="mb-3 flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <h2 className="text-sm font-semibold tracking-wide text-muted">
+        <h2 className="text-base font-semibold tracking-tight text-ink">
           {title}
         </h2>
         {hint ? <p className="mt-1 text-sm text-muted">{hint}</p> : null}
@@ -394,8 +394,12 @@ export function Field({
       <label htmlFor={htmlFor} className="block text-sm font-medium">
         {label}
       </label>
-      {children}
-      {hint ? <p className="text-xs leading-relaxed text-muted">{hint}</p> : null}
+      {hint && htmlFor && isValidElement(children)
+        ? cloneElement(children as ReactElement<{ 'aria-describedby'?: string }>, {
+            'aria-describedby': [((children as ReactElement<{ 'aria-describedby'?: string }>).props['aria-describedby']), `${htmlFor}-hint`].filter(Boolean).join(' '),
+          })
+        : children}
+      {hint ? <p id={htmlFor ? `${htmlFor}-hint` : undefined} className="text-xs leading-relaxed text-muted">{hint}</p> : null}
     </div>
   );
 }

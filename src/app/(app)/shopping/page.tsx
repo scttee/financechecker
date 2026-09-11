@@ -10,6 +10,7 @@ import {
   Button,
   Card,
   CardHeader,
+  PageTitle,
   Field,
   Input,
   Money,
@@ -50,7 +51,8 @@ export default async function ShoppingPage() {
   const notion = notionConfigured();
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
+      <PageTitle sub="A place for things you want, with room to decide when they fit.">Considered purchases</PageTitle>
       <Card>
         <CardHeader
           title="Gear & Objects"
@@ -114,6 +116,7 @@ export default async function ShoppingPage() {
         )}
       </Card>
 
+      <div className="grid items-start gap-5 lg:grid-cols-2">
       {considering.map(({ item, decision }) => (
         <Card key={item.id}>
           <div className="flex items-start justify-between gap-3">
@@ -256,6 +259,8 @@ export default async function ShoppingPage() {
         </Card>
       ))}
 
+      </div>
+      {considering.length === 0 ? <Card><CardHeader title="Room to consider something new" hint="Add an item below when something catches your eye. Your waiting period and funding checks will appear here." /></Card> : null}
       {elsewhere.length > 0 ? (
         <Card>
           <CardHeader title="Not under consideration" />
