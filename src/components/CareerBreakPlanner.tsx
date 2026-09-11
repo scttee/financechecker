@@ -83,7 +83,7 @@ export function CareerBreakPlanner({ initial, context, savedAt, baselinePerCycle
         ) : (
           <>
             <Card className="spend-hero order-1">
-              <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <span className="flex items-center gap-2 text-sm font-semibold text-accent"><Sparkles className="h-4 w-4" aria-hidden />Your possible future</span>
                 <Pill tone={result.gapCents === 0 ? 'ontrack' : 'notice'}>{result.gapCents === 0 ? 'Funded in this scenario' : 'Funding gap'}</Pill>
               </div>
