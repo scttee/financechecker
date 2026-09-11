@@ -67,7 +67,7 @@ export default async function LoginPage({
           <Field
             label="Password"
             htmlFor="password"
-            hint="Set with npm run hash-password, stored as a scrypt hash in APP_PASSWORD_HASH."
+            hint="Use the password you chose when setting up Future Scotty."
           >
             <Input
               id="password"
@@ -75,6 +75,7 @@ export default async function LoginPage({
               type="password"
               autoComplete="current-password"
               autoFocus
+              aria-invalid={params.error === "wrong" || undefined}
               required
             />
           </Field>

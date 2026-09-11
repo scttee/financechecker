@@ -17,6 +17,7 @@ import { calculatePaydayAllocation } from '@/lib/domain/allocation';
 import { budgetedRoles, roleDefinition } from '@/lib/domain/roles';
 import { cycleProgress, spendingDaysRemaining, type CycleProgress, type DerivedPayCycle } from '@/lib/domain/payCycle';
 import { expectedBefore } from '@/lib/domain/recurring';
+import { addDaysUtc, zonedStartOfDay } from '@/lib/time';
 import { getAllocationPercents, getBalancesByRole, getLiquidBalance, getSettings, thresholdsFrom } from './settings';
 import { leakageInPeriod } from './leakageService';
 import { buildInsight, type Insight } from './insight';
@@ -162,6 +163,20 @@ export interface GoalView {
   isHardFloor: boolean;
 }
 
+/**
+ * One everyday discretionary category, spent-today against a fair daily
+ * share of what is left in it — the figure that answers "can I get a coffee
+ * today" without having to work the cycle maths out by hand.
+ */
+export interface DailyCategoryLine {
+  role: AccountRole;
+  label: string;
+  spentTodayCents: number;
+  remainingCents: number;
+  /** What is left in the category, spread evenly over the days left to payday. */
+  dailyBudgetCents: number;
+}
+
 export interface TodayView {
   cycle: CycleView | null;
   goals: GoalView[];
@@ -171,6 +186,9 @@ export interface TodayView {
   futureOptionsBalanceCents: number;
   investedThisCycleCents: number;
   safeToSpend: SafeToSpendResult | null;
+  /** Spent today across every role that counts toward safe-to-spend. */
+  spentTodayCents: number;
+  dailyCategories: DailyCategoryLine[];
   insight: Insight;
   health: FinancialHealth | InsufficientHealth;
   leakageThisMonth: { cents: number; count: number };
@@ -234,6 +252,24 @@ export async function getTodayView(now: Date = new Date()): Promise<TodayView> {
     });
   }
 
+  let dailyCategories: DailyCategoryLine[] = [];
+  let spentTodayCents = 0;
+  if (cycle && safeToSpend) {
+    const dayStart = zonedStartOfDay(now, settings.timezone);
+    const dayEnd = addDaysUtc(dayStart, 1);
+    const spentTodayByRole = await spendByRole(dayStart, dayEnd);
+
+    dailyCategories = getDailyCategories(cycle, spentTodayByRole, safeToSpend.daysRemaining);
+
+    // The same total the hero "you can spend today" pace draws down from —
+    // every role that counts toward safe-to-spend, not just the everyday
+    // ones broken out above, so the two figures agree with each other.
+    spentTodayCents = safeToSpend.discretionaryRoles.reduce(
+      (sum, role) => sum + (spentTodayByRole.get(role) ?? 0),
+      0,
+    );
+  }
+
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const leakageThisMonth = await leakageInPeriod(monthStart, now);
 
@@ -286,6 +322,8 @@ export async function getTodayView(now: Date = new Date()): Promise<TodayView> {
     futureOptionsBalanceCents: balances.get('FUTURE_OPTIONS') ?? 0,
     investedThisCycleCents: cycle?.investedCents ?? 0,
     safeToSpend,
+    spentTodayCents,
+    dailyCategories,
     insight,
     health,
     leakageThisMonth,
@@ -369,6 +407,33 @@ export async function discretionaryRoles(): Promise<AccountRole[]> {
     return budgetedRoles().filter((r) => roleDefinition(r).discretionary);
   }
   return [...roles];
+}
+
+/**
+ * Everyday discretionary categories, spent-today against a fair daily share
+ * of what is left in each — Dining & Social, Fun, and anything else marked
+ * discretionary that is a day-to-day spend rather than a saved-for purchase.
+ *
+ * Gear & Objects and Buffer are discretionary too, but neither is a "can I
+ * get this today" category — Gear is saved toward a thing, Buffer is slack
+ * for overshoot elsewhere — so both are left off this list.
+ */
+function getDailyCategories(
+  cycle: CycleView,
+  spentToday: Map<AccountRole, number>,
+  daysRemaining: number,
+): DailyCategoryLine[] {
+  const excluded = new Set<AccountRole>(['GEAR_OBJECTS', 'BUFFER']);
+
+  return cycle.categories
+    .filter((c) => roleDefinition(c.role).discretionary && !excluded.has(c.role))
+    .map((c) => ({
+      role: c.role,
+      label: c.label,
+      spentTodayCents: spentToday.get(c.role) ?? 0,
+      remainingCents: c.remainingCents,
+      dailyBudgetCents: Math.floor(Math.max(0, c.remainingCents) / daysRemaining),
+    }));
 }
 
 /** Recurring charges expected between now and payday. */

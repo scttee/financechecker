@@ -31,7 +31,7 @@ export function Card({
     <Tag
       id={id}
       className={cn(
-        'rounded-card border border-line bg-card p-4 shadow-card sm:p-5',
+        'rounded-card border border-line bg-card p-5 shadow-card sm:p-6',
         className,
       )}
     >
@@ -52,7 +52,7 @@ export function CardHeader({
   return (
     <div className="mb-3 flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <h2 className="text-[0.8125rem] font-medium uppercase tracking-[0.08em] text-muted">
+        <h2 className="text-sm font-semibold tracking-wide text-muted">
           {title}
         </h2>
         {hint ? <p className="mt-1 text-sm text-muted">{hint}</p> : null}
@@ -65,14 +65,14 @@ export function CardHeader({
 export function PageTitle({ children, sub }: { children: ReactNode; sub?: ReactNode }) {
   return (
     <header className="mb-5">
-      <h1 className="text-2xl font-bold tracking-tight">{children}</h1>
+      <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{children}</h1>
       {sub ? <p className="mt-1 text-sm text-muted">{sub}</p> : null}
     </header>
   );
 }
 
 export function Stack({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn('space-y-3', className)}>{children}</div>;
+  return <div className={cn('space-y-5', className)}>{children}</div>;
 }
 
 export function Empty({ title, body, action }: { title: string; body?: string; action?: ReactNode }) {
@@ -105,7 +105,7 @@ export function Figure({
   return (
     <div>
       {label ? (
-        <p className="text-[0.8125rem] font-medium uppercase tracking-[0.08em] text-muted">
+        <p className="text-sm font-semibold tracking-wide text-muted">
           {label}
         </p>
       ) : null}
@@ -172,7 +172,7 @@ export function Progress({
       aria-valuenow={pct}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-label={label}
+      aria-label={label ?? "Progress"}
     >
       <div className={cn('h-full rounded-full transition-[width]', bar)} style={{ width: `${pct}%` }} />
     </div>
@@ -204,7 +204,7 @@ export function PaceBar({
   }[tone];
 
   return (
-    <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-track">
+    <div role="img" aria-label={`${Math.round(spentPct)}% of budget spent; ${Math.round(elapsedPct)}% of pay cycle elapsed`} className="relative h-2 w-full overflow-hidden rounded-full bg-track">
       <div className={cn('h-full rounded-full', bar)} style={{ width: `${spent}%` }} />
       <div
         className="absolute top-0 h-full w-px bg-ink/40"
@@ -337,7 +337,7 @@ const BUTTON_BASE =
   'inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50';
 
 export const buttonStyles = {
-  primary: cn(BUTTON_BASE, 'bg-accent text-white hover:opacity-90'),
+  primary: cn(BUTTON_BASE, 'bg-ink text-card hover:opacity-90'),
   secondary: cn(BUTTON_BASE, 'border border-line bg-card text-ink hover:bg-track'),
   ghost: cn(BUTTON_BASE, 'text-muted hover:bg-track hover:text-ink'),
   quiet: cn(
@@ -401,7 +401,7 @@ export function Field({
 }
 
 export const inputStyles =
-  'w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink placeholder:text-faint focus:border-accent focus:outline-none focus-visible:outline-none';
+  'w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink placeholder:text-faint focus:border-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cn(inputStyles, props.className)} />;

@@ -7,6 +7,7 @@ import {
   CalendarRange,
   HeartPulse,
   Home,
+  Menu,
   Receipt,
   Settings,
   ShoppingBag,
@@ -45,13 +46,13 @@ export function Nav({ reviewCount }: { reviewCount: number }) {
         aria-label="Main"
       >
         <ul className="mx-auto flex max-w-column items-stretch justify-between px-1 pb-[env(safe-area-inset-bottom)]">
-          {ITEMS.slice(0, 5).map(({ href, label, Icon }) => (
+          {ITEMS.slice(0, 4).map(({ href, label, Icon }) => (
             <li key={href} className="flex-1">
               <Link
                 href={href}
                 aria-current={isActive(href) ? 'page' : undefined}
                 className={cn(
-                  'flex flex-col items-center gap-0.5 py-2 text-[0.625rem] font-medium transition-colors',
+                  'flex flex-col items-center gap-0.5 py-2 text-xs font-medium transition-colors',
                   isActive(href) ? 'text-accent' : 'text-muted',
                 )}
               >
@@ -63,6 +64,23 @@ export function Nav({ reviewCount }: { reviewCount: number }) {
               </Link>
             </li>
           ))}
+          <li className="relative flex-1">
+            <details className="group" key={pathname}>
+              <summary className={cn('flex flex-col items-center gap-0.5 py-2 text-xs font-medium', ITEMS.slice(4).some(({ href }) => isActive(href)) ? 'text-accent' : 'text-muted')}>
+                <Menu className="h-5 w-5" aria-hidden />
+                More{reviewCount > 0 ? <span className="sr-only">, {reviewCount} items to review</span> : null}
+              </summary>
+              <div className="absolute bottom-full right-0 mb-3 w-56 rounded-card border border-line bg-card p-2 shadow-lg">
+                <p className="px-3 py-2 text-xs font-semibold text-muted">More destinations</p>
+                {ITEMS.slice(4).map(({ href, label, Icon }) => (
+                  <Link key={href} href={href} aria-current={isActive(href) ? 'page' : undefined} className={cn('flex min-h-12 items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium', isActive(href) ? 'bg-accent-soft text-accent' : 'text-ink hover:bg-track')}>
+                    <Icon className="h-4 w-4" aria-hidden />{label}
+                    {href === '/review' && reviewCount > 0 ? <span className="ml-auto">{reviewCount}<span className="sr-only"> items to review</span></span> : null}
+                  </Link>
+                ))}
+              </div>
+            </details>
+          </li>
         </ul>
       </nav>
 
@@ -75,7 +93,7 @@ export function Nav({ reviewCount }: { reviewCount: number }) {
                 href={href}
                 aria-current={isActive(href) ? 'page' : undefined}
                 className={cn(
-                  'inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors',
+                  'inline-flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                   isActive(href)
                     ? 'bg-accent-soft text-accent'
                     : 'text-muted hover:bg-track hover:text-ink',

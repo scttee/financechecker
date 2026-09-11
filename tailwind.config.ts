@@ -47,11 +47,11 @@ const config: Config = {
         'figure-sm': ['1.75rem', { lineHeight: '1.1', letterSpacing: '-0.025em', fontWeight: '700' }],
       },
       borderRadius: {
-        card: '14px',
+        card: '20px',
       },
       maxWidth: {
         column: '30rem',
-        wide: '52rem',
+        wide: '68rem',
       },
       boxShadow: {
         card: '0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 1px rgba(0, 0, 0, 0.04)',

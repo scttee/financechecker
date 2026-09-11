@@ -14,6 +14,7 @@ import {
   Input,
   Money,
   Pill,
+  PageTitle,
   Select,
   Why,
 } from '@/components/ui';
@@ -98,7 +99,8 @@ export default async function TransactionsPage({
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
+      <PageTitle sub="Find a payment, understand its bucket, or review an assignment.">Transactions</PageTitle>
       <Card>
         <CardHeader title="Filters" hint={`${total} ${total === 1 ? 'transaction' : 'transactions'}`} />
 

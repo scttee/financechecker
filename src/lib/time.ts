@@ -86,6 +86,19 @@ export function formatDateTime(date: Date, timeZone: string = DEFAULT_TIMEZONE):
   return `${formatDayShort(date, timeZone)}, ${formatTime(date, timeZone)}`;
 }
 
+/**
+ * "3m ago", "2h ago", or a short date once it is more than a day old — how
+ * stale a "last synced" figure is, at a glance.
+ */
+export function formatRelative(date: Date, now: Date, timeZone: string = DEFAULT_TIMEZONE): string {
+  const minutes = Math.max(0, minutesBetween(date, now));
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return formatDayShort(date, timeZone);
+}
+
 /** RFC-3339 with offset, the format Up's filter[since] / filter[until] want. */
 export function toRfc3339(date: Date, timeZone: string = DEFAULT_TIMEZONE): string {
   return format(inZone(date, timeZone), "yyyy-MM-dd'T'HH:mm:ssXXX");

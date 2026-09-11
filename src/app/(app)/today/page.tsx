@@ -5,7 +5,7 @@ import { getTodayAiInsight } from '@/lib/services/aiInsight';
 import { getScoreTrend } from '@/lib/services/healthScoreHistory';
 import { configStatus } from '@/lib/env';
 import { formatCents } from '@/lib/money';
-import { formatDayShort, formatDateTime } from '@/lib/time';
+import { formatDayShort, formatDateTime, formatRelative } from '@/lib/time';
 import {
   Button,
   Card,
@@ -16,11 +16,13 @@ import {
   Money,
   Notice,
   Pill,
+  PageTitle,
   Progress,
   Stack,
   Why,
 } from '@/components/ui';
 import { SafeToSpendCard } from '@/components/SafeToSpend';
+import { TodaySpendingCard } from '@/components/TodaySpending';
 import { FinancialHealthCard } from '@/components/FinancialHealth';
 import { regenerateTodayInsightAction } from '@/app/actions';
 
@@ -51,14 +53,22 @@ export default async function TodayPage({
     getTodayAiInsight(),
     getScoreTrend(),
   ]);
-  const { cycle, insight, health, safeToSpend } = view;
+  const { cycle, insight, health, safeToSpend, spentTodayCents, dailyCategories } = view;
   const status = configStatus();
+  const now = new Date();
 
   const tone =
     insight.tone === 'ATTENTION' ? 'attention' : insight.tone === 'NOTICE' ? 'notice' : 'ontrack';
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
+      <PageTitle sub="A little clarity for today. A little more room for your future.">Today</PageTitle>
+      <p className="text-xs text-faint">
+        {view.lastSyncAt
+          ? `Last synced ${formatRelative(view.lastSyncAt, now, view.timezone)}.`
+          : 'Never synced yet.'}
+      </p>
+
       {params.aiError ? (
         <Notice tone="notice" title="Claude did not answer">
           <p>{params.aiError}</p>
@@ -83,6 +93,7 @@ export default async function TodayPage({
       {/* Safe to spend. The number this app exists to get right, checked
           daily — top of the screen, ahead of the score and the insight,
           because "what can I spend today" is the actual question. */}
+      <div className="grid items-start gap-5 lg:grid-cols-[1.2fr_1fr]">
       {safeToSpend && cycle ? (
         <SafeToSpendCard
           result={safeToSpend}
@@ -90,6 +101,7 @@ export default async function TodayPage({
           nextPayday={cycle.endAt}
           nextPaydayIsProjected={cycle.endIsProjected}
           timezone={view.timezone}
+          spentTodayCents={spentTodayCents}
         />
       ) : (
         <Empty
@@ -98,6 +110,12 @@ export default async function TodayPage({
           action={<LinkButton href="/settings?tab=salary">Check the salary rule</LinkButton>}
         />
       )}
+
+      {/* Today, by category. The narrower question underneath "what can I
+          spend today" — is there room in Dining & Social specifically, right
+          now, for a coffee. */}
+      <TodaySpendingCard categories={dailyCategories} />
+      </div>
 
       {/* The score. One number standing in for the four that answer "am I
           okay, and should I be spending right now" — the working behind the
@@ -129,7 +147,7 @@ export default async function TodayPage({
               href={insight.href}
               className="shrink-0 text-sm font-medium text-accent hover:underline"
             >
-              Look
+              View details
             </Link>
           ) : null}
         </div>
@@ -243,7 +261,7 @@ export default async function TodayPage({
             title="Pay cycle"
             action={
               <Link href="/pay-cycle" className="text-sm font-medium text-accent hover:underline">
-                Open
+                View pay cycle
               </Link>
             }
           />

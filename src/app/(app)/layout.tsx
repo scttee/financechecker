@@ -32,10 +32,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-dvh">
+      <a href="#main-content" className="skip-link">Skip to content</a>
       <header className="border-b border-line bg-card/80 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="mx-auto flex max-w-wide flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold tracking-tight">Future Scotty</span>
+            <span className="text-lg font-semibold tracking-tight">Future Scotty</span>
             {status.mockMode ? (
               <Pill tone="notice" className="normal-case tracking-normal">
                 Mock data
@@ -61,7 +62,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </header>
 
-      <main className="mx-auto max-w-wide px-5 pb-24 pt-5 sm:pb-10">{children}</main>
+      <main id="main-content" tabIndex={-1} className="mx-auto max-w-wide px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-7 sm:px-6 sm:pb-12 sm:pt-10">{children}</main>
 
       <div className="sm:hidden">
         <Nav reviewCount={reviewCount} />

@@ -2,7 +2,7 @@ import type { SafeToSpendResult } from '@/lib/domain/safeToSpend';
 import { formatCents } from '@/lib/money';
 import { formatDayShort } from '@/lib/time';
 import { roleLabel } from '@/lib/domain/roles';
-import { Card, CardHeader, Money, Why } from '@/components/ui';
+import { Card, CardHeader, Money, Progress, Why } from '@/components/ui';
 
 /**
  * The safe-to-spend card.
@@ -13,6 +13,13 @@ import { Card, CardHeader, Money, Why } from '@/components/ui';
  * rather than an allowance, because it is a way of reading the number rather
  * than a budget to be policed. And the working is always available: a figure
  * I cannot check is a figure I will stop believing.
+ *
+ * A pace barely moves when a single day's spending lands — an $8 coffee
+ * against nine days left only pulls it down by less than a dollar, which
+ * reads as "this isn't updating" even though the transaction landed fine. The
+ * spent-today line underneath exists so today's spending is visible on its
+ * own terms, next to the rate, rather than only smeared across the days that
+ * remain.
  */
 export function SafeToSpendCard({
   result,
@@ -20,17 +27,27 @@ export function SafeToSpendCard({
   nextPayday,
   nextPaydayIsProjected,
   timezone,
+  spentTodayCents,
 }: {
   result: SafeToSpendResult;
   daysToPayday: number;
   nextPayday: Date;
   nextPaydayIsProjected: boolean;
   timezone: string;
+  spentTodayCents: number;
 }) {
+  const overToday = spentTodayCents > result.perDayCents;
+  const todayPct =
+    result.perDayCents > 0
+      ? (spentTodayCents / result.perDayCents) * 100
+      : spentTodayCents > 0
+        ? 100
+        : 0;
+
   return (
-    <Card id="safe-to-spend">
+    <Card id="safe-to-spend" className="spend-hero">
       <CardHeader
-        title="You can spend today"
+        title="Your daily spending pace"
         hint={
           nextPaydayIsProjected
             ? `Payday projected for ${formatDayShort(nextPayday, timezone)}`
@@ -38,7 +55,7 @@ export function SafeToSpendCard({
         }
       />
 
-      <p className="tabular text-figure">{formatCents(result.perDayCents, { showCents: false })}</p>
+      <p className="tabular mt-5 text-5xl font-semibold tracking-tight sm:text-6xl">{formatCents(result.perDayCents, { showCents: false })}</p>
 
       <p className="mt-1.5 text-sm text-muted">
         <span className="tabular font-medium text-ink">{formatCents(result.safeToSpendCents)}</span>{' '}
@@ -46,10 +63,27 @@ export function SafeToSpendCard({
         allowance, just the rate this spreads to.
       </p>
 
+      {spentTodayCents > 0 || result.perDayCents > 0 ? (
+        <div className="mt-3">
+          <div className="flex items-baseline justify-between gap-3 text-sm">
+            <span className="text-muted">Spent today</span>
+            <span className="tabular font-medium">
+              <Money cents={spentTodayCents} className={overToday ? 'text-attention' : undefined} />
+            </span>
+          </div>
+          <Progress
+            className="mt-1.5"
+            value={todayPct}
+            tone={overToday ? 'notice' : 'ontrack'}
+            label="Spent today against today's pace"
+          />
+        </div>
+      ) : null}
+
       {result.safeToSpendCents === 0 ? (
         <p className="mt-2 text-sm text-muted">
           Nothing spare in the discretionary buckets. Rent, bills, groceries and health are
-          separate and still funded.
+          tracked separately. Check your pay cycle for their remaining budgets.
         </p>
       ) : null}
 
