@@ -65,7 +65,7 @@ export default async function GoalsPage({
         </Notice>
       ) : null}
 
-      <Card className="spend-hero"><CardHeader title="What could your savings make possible?" hint="Turn Future Options into a career-break timeline, with living costs and a buffer." /><LinkButton href="/plan" variant="primary">Explore your future</LinkButton></Card>
+
 
       {/* Planning. When each goal is funded at the plan's current rate —
           the forward-looking question the rest of this page doesn't answer,

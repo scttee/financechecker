@@ -7,9 +7,20 @@ import { toDateInputValue } from '@/lib/time';
 import { shiftMonths } from '@/lib/domain/careerBreak';
 import { Card, Notice, PageTitle } from '@/components/ui';
 import { CareerBreakPlanner } from '@/components/CareerBreakPlanner';
+import { SavingsOutlook } from '@/components/SavingsOutlook';
+import { getSavingsProjection } from '@/lib/services/savingsProjection';
 
 export const dynamic = 'force-dynamic';
-export default async function PlanPage() {
+export default async function PlanPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+  const params = await searchParams;
+  if (params.view !== 'career-break') {
+    const data = await getSavingsProjection();
+    return <div className="dashboard-stack">
+      <PageTitle sub="The money you keep. The choices it creates.">Future</PageTitle>
+      {data.ready ? <SavingsOutlook data={data} /> : <Notice title="Your projection needs a complete pay plan"><Link className="text-accent underline" href="/settings?tab=allocations">Check salary and allocations</Link></Notice>}
+      <div className="support-links"><Link href="/goals">Balances & goals <span aria-hidden>↗</span></Link><Link href="/plan?view=career-break">Plan a career break <span aria-hidden>↗</span></Link></div>
+    </div>;
+  }
   const [settings, plans, runway, saved, balanceCents, latestCycle, oldestTransaction] = await Promise.all([
     getSettings(), getGoalPlans(), getRunway(), prisma.careerBreakPlan.findUnique({ where: { id: 'personal' } }),
     getRoleBalance('FUTURE_OPTIONS'), prisma.payCycle.findFirst({ orderBy: { startAt: 'desc' } }),
@@ -25,8 +36,9 @@ export default async function PlanPage() {
   const incompleteHistory = !oldestTransaction || now.getTime() - oldestTransaction.createdAt.getTime() < 92 * 86_400_000;
   const nextPayday = latestCycle ? toDateInputValue(latestCycle.endAt, settings.timezone) : shiftMonths(today, 1);
   return <div className="space-y-5">
-    <PageTitle sub="Make room for a career break, a new direction, or time that belongs to you.">Your future</PageTitle>
-    <Card className="border-l-4 border-l-accent"><p className="text-sm font-semibold">A plan for more choice</p><p className="mt-1 max-w-3xl text-sm text-muted">Start with the life you want to make possible. This scenario connects your Future Options fund to a start date, living costs and a buffer for what comes next.</p></Card>
+    <Link href="/plan" className="inline-flex min-h-11 items-center text-sm text-accent">← Back to Future</Link>
+    <PageTitle sub="A scenario for time away, with Emergency protected.">Career break</PageTitle>
+
     {!latestCycle ? <Notice tone="notice" title="A payday is needed">Set up your salary rule before saving a plan. <Link className="text-accent underline" href="/settings?tab=salary">Open salary settings</Link></Notice> : <>
       {!saved && incompleteHistory ? <Notice tone="notice" title="Check the monthly cost estimate">There is less than three months of recorded spending. The suggested average may be too low. Enter your full expected monthly costs before relying on the projection.</Notice> : null}
       <CareerBreakPlanner initial={initial} context={{ today, nextPayday, cadence: settings.salaryCadence, balanceCents }} savedAt={saved?.updatedAt.toISOString() ?? null} baselinePerCycleCents={baselinePerCycleCents} />

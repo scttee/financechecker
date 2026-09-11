@@ -600,7 +600,7 @@ this codebase was invented.
 
 ## Career-break planning and health trends
 
-**Your future** (`/plan`) connects the current Future Options balance to a saved
+**Career-break planning** (`/plan?view=career-break`) connects the current Future Options balance to a saved
 career-break scenario: start date, monthly costs, duration, contributions,
 one-off costs and return-to-work buffer. The projection counts calendar paydays
 before the break and stops contributions when it starts. It shows the funding
@@ -615,6 +615,28 @@ assumptions never changes bank allocations. One personal scenario is stored in
 `CareerBreakPlan`; apply the included additive migration with
 `npx prisma migrate deploy` before running the updated app.
 
-Health now displays all six score dimensions and selectable 1/3/6-month history
+Health retains all six dimensions in its score breakdown and selectable 1/3/6-month history
 from recorded version-2 snapshots. Fewer than two observations produce an explicit
 empty state. Charts also expose their numbers in accessible tables.
+
+
+## Information architecture: three daily priorities
+
+The primary navigation is **Today / Health / Future**. Supporting routes remain
+available from the toolbar’s tools menu and contextual links; no financial
+records were deleted as part of the simplification.
+
+| Destination | Responsibility | What was moved off its default surface |
+| --- | --- | --- |
+| Today | Remaining spending pace, spending so far, Health/Future shortcuts | Repeated goal balances, payday card, investment totals, AI regeneration and career-break promotion |
+| Health | Score, recorded trend and one next action | Balance sheet/runway, protection/admin and wellbeing use disclosures; duplicate goal projections and AI narration removed |
+| Future | Contributions-only savings/investment path and extra-saving comparison | Career-break tool moved to `/plan?view=career-break`; saved plan remains intact |
+| Supporting tools | Transaction search, pay-cycle audit, goal balances, purchases, review and settings | Removed from the primary tab bar |
+
+The savings projection starts with Emergency, Future Options and recorded
+investments. It retains scheduled Emergency/Future Options/Investing
+contributions and optional extra saving. It excludes everyday cash, Travel,
+Gear, super and debts and must not be presented as net worth. It assumes no
+withdrawals, returns, fees, inflation or tax changes. Main forecast and Today’s
+one-year preview share `projectSavings`; calendar paydays after today are counted
+once. This comparison does not save assumptions or change allocations.

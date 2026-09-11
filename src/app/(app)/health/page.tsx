@@ -1,21 +1,16 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/db';
 import { ScoreHistory } from '@/components/ScoreHistory';
-import { HealthDimensions } from '@/components/HealthDimensions';
 import { getTodayView, recentCyclesWithInvesting } from '@/lib/services/overview';
-import { projectGoal } from '@/lib/domain/projection';
 import { getScoreTrend } from '@/lib/services/healthScoreHistory';
 import { getBalanceSheet } from '@/lib/services/balanceSheet';
 import { getFreedomRate } from '@/lib/services/freedomRate';
 import { getRunway } from '@/lib/services/runway';
 import { getProtectionItems, PROTECTION_KINDS } from '@/lib/services/protection';
 import { getAdminItems, ADMIN_KINDS } from '@/lib/services/admin';
-import { getGoalPlans } from '@/lib/services/planning';
-import { getHealthAiSummary } from '@/lib/services/aiInsight';
-import { getSettings, strategyStatementOf } from '@/lib/services/settings';
+import { getSettings } from '@/lib/services/settings';
 import { getWellbeingHistory } from '@/lib/services/wellbeing';
 import { WELLBEING_DIMENSIONS } from '@/lib/domain/wellbeing';
-import { configStatus } from '@/lib/env';
 import { selectBestNextAction } from '@/lib/domain/bestNextAction';
 import { formatCents } from '@/lib/money';
 import { formatDate, formatDateTime, toDateInputValue } from '@/lib/time';
@@ -33,7 +28,6 @@ import {
 } from '@/components/ui';
 import { FinancialHealthCard } from '@/components/FinancialHealth';
 import {
-  regenerateHealthInsightAction,
   saveAdminItemAction,
   saveWellbeingCheckinAction,
   saveProtectionItemAction,
@@ -62,8 +56,6 @@ export default async function HealthPage({
     runway,
     protectionItems,
     adminItems,
-    plans,
-    aiSummary,
     settings,
     wellbeingHistory,
   ] = await Promise.all([
@@ -74,8 +66,6 @@ export default async function HealthPage({
     getRunway(now),
     getProtectionItems(),
     getAdminItems(now),
-    getGoalPlans(now),
-    getHealthAiSummary(),
     getSettings(),
     getWellbeingHistory(2),
   ]);
@@ -86,7 +76,6 @@ export default async function HealthPage({
     orderBy: { takenAt: 'asc' },
     select: { takenAt: true, score: true },
   });
-  const status = configStatus();
   const { health } = view;
 
   const protectionRecordedCount = protectionItems.filter(
@@ -105,23 +94,21 @@ export default async function HealthPage({
   });
 
   return (
-    <div className="space-y-5">
-      <PageTitle sub="See the whole picture. Notice your trends. Choose one useful next step.">Financial health</PageTitle>
+    <div className="dashboard-stack">
+      <PageTitle sub="How you’re doing. What deserves your attention.">Financial health</PageTitle>
       {params.aiError ? (
         <Notice tone="notice" title="Claude did not answer">
           <p>{params.aiError}</p>
         </Notice>
       ) : null}
 
-      <nav aria-label="Health sections" className="flex flex-wrap gap-2">
-        {[['health-overview', 'Overview'], ['health-trends', 'Trends'], ['health-balance', 'Balances'], ['health-runway', 'Runway'], ['health-protection', 'Protection'], ['health-wellbeing', 'Check-in']].map(([id, label]) => <Link key={id} href={`#${id}`} className="inline-flex min-h-11 items-center rounded-full border border-line bg-card px-4 text-sm font-medium text-muted hover:text-ink">{label}</Link>)}
-      </nav>
+      <div className="grid items-start gap-4 lg:grid-cols-2">
       <div id="health-overview">
         {health.status === 'READY' ? <FinancialHealthCard health={health} trend={trend} /> : <Notice title={health.headline}>{health.detail}</Notice>}
       </div>
-      {health.status === 'READY' ? <HealthDimensions health={health} /> : null}
       <div id="health-trends"><ScoreHistory timezone={settings.timezone} today={now.toISOString()} points={scoreHistory.map((p) => ({ date: p.takenAt.toISOString(), score: p.score }))} /></div>
 
+      </div>
       {/* Best next action. One, not twelve. */}
       <Card className="border-l-[3px]">
         <p className="text-[0.8125rem] font-medium uppercase tracking-[0.08em] text-muted">
@@ -138,64 +125,7 @@ export default async function HealthPage({
         ) : null}
       </Card>
 
-      {/* Strategy. Context, never a gate. */}
-      <Card>
-        <CardHeader title="Strategy" hint="Editable in Settings." />
-        <p className="whitespace-pre-line text-sm leading-relaxed text-muted">
-          {strategyStatementOf(settings)}
-        </p>
-      </Card>
-
-      {/* Claude's read, once generated. */}
-      {status.aiConfigured || aiSummary ? (
-        <Card>
-          <CardHeader title="Claude's read" />
-          {aiSummary ? (
-            <div className="space-y-3 text-sm leading-relaxed">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.06em] text-faint">What changed</p>
-                <p className="mt-0.5">{aiSummary.whatChanged}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.06em] text-faint">Going well</p>
-                <p className="mt-0.5">{aiSummary.goingWell}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.06em] text-faint">Worth noticing</p>
-                <p className="mt-0.5">{aiSummary.worthNoticing}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.06em] text-faint">Best next move</p>
-                <p className="mt-0.5">{aiSummary.bestNextMove}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.06em] text-faint">Context</p>
-                <p className="mt-0.5">{aiSummary.context}</p>
-              </div>
-              {aiSummary.moneyFeelsNote && aiSummary.moneyFeelsNote !== 'Not enough data yet.' ? (
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.06em] text-faint">How money feels</p>
-                  <p className="mt-0.5">{aiSummary.moneyFeelsNote}</p>
-                </div>
-              ) : null}
-              <p className="text-xs text-faint">
-                Generated {formatDateTime(aiSummary.generatedAt, settings.timezone)} · {aiSummary.model} · about{' '}
-                {aiSummary.costCents < 1 ? '<1¢' : `${Math.round(aiSummary.costCents)}¢`}
-              </p>
-            </div>
-          ) : (
-            <p className="text-sm text-muted">Not generated yet.</p>
-          )}
-          {status.aiConfigured ? (
-            <form action={regenerateHealthInsightAction} className="mt-3">
-              <Button type="submit" variant="secondary">
-                {aiSummary ? 'Regenerate' : 'Ask Claude'}
-              </Button>
-            </form>
-          ) : null}
-        </Card>
-      ) : null}
-
+      <details className="disclosure-panel" id="health-balances"><summary><span>Balances & resilience</span><span className="text-xs font-normal text-muted">Assets, savings rate, runway</span></summary><div className="space-y-4 pt-4">
       {/* Balance sheet. */}
       <Card id="health-balance">
         <CardHeader title="Balance sheet" hint="Cash from Up, everything else from manual snapshots on Goals." />
@@ -284,57 +214,8 @@ export default async function HealthPage({
         ) : null}
       </Card>
 
-      <Card className="spend-hero"><CardHeader title="Make room for a career break" hint="Choose a start date and explore how contributions change what is possible." /><Link href="/plan" className="inline-flex min-h-11 items-center text-sm font-semibold text-accent">Open your future plan →</Link></Card>
-
-      {/* Goal trajectories. */}
-      {plans.filter((p) => !p.reachedAt).length > 0 ? (
-        <Card>
-          <CardHeader title="Goal trajectories" hint="What if I contributed more or less?" />
-          <div className="space-y-4">
-            {plans
-              .filter((p) => !p.reachedAt)
-              .map((plan) => {
-                const current = plan.projection.perCycleCents;
-                const rateVariants = [
-                  { label: 'Current', perCycleCents: current },
-                  { label: '+$100/cycle', perCycleCents: current + 10_000 },
-                  { label: '+$250/cycle', perCycleCents: current + 25_000 },
-                  { label: '-$100/cycle', perCycleCents: Math.max(0, current - 10_000) },
-                ];
-                return (
-                  <div key={plan.key}>
-                    <p className="font-medium">{plan.name}</p>
-                    <ul className="mt-1.5 space-y-1 text-sm">
-                      {rateVariants.map((v) => {
-                        const projection = projectGoal({
-                          currentCents: plan.currentCents,
-                          targetCents: plan.targetCents,
-                          perCycleCents: v.perCycleCents,
-                          now,
-                          cycleLengthDays: plan.cycleLengthDays,
-                        });
-                        return (
-                          <li key={v.label} className="flex items-baseline justify-between gap-3">
-                            <span className={v.label === 'Current' ? 'font-medium text-ink' : 'text-muted'}>
-                              {formatCents(v.perCycleCents, { showCents: false })}/fortnight
-                              {v.label !== 'Current' ? ` (${v.label})` : ''}
-                            </span>
-                            <span className="tabular text-muted">
-                              {projection.projectedDate
-                                ? formatDate(projection.projectedDate, settings.timezone)
-                                : 'No projection'}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                );
-              })}
-          </div>
-        </Card>
-      ) : null}
-
+      </div></details>
+      <details className="disclosure-panel" id="health-records"><summary><span>Protection & admin</span><span className="text-xs font-normal text-muted">{adminOverdueCount > 0 ? `${adminOverdueCount} overdue` : 'Your supporting records'}</span></summary><div className="space-y-4 pt-4">
       {/* Protection. */}
       <Card id="health-protection">
         <CardHeader title="Protection" hint="Tracked by hand. Cover amounts are never assumed." />
@@ -466,6 +347,8 @@ export default async function HealthPage({
         </ul>
       </Card>
 
+      </div></details>
+      <details className="disclosure-panel"><summary><span>Money check-in</span><span className="text-xs font-normal text-muted">How it feels</span></summary><div className="pt-4">
       {/* How money feels. Deliberately separate from the score above — a
           subjective check-in, never averaged into it. */}
       <Card id="health-wellbeing">
@@ -526,6 +409,8 @@ export default async function HealthPage({
           </form>
         </details>
       </Card>
+      </div></details>
+      <div className="support-links"><Link href="/review">Review activity <span aria-hidden>↗</span></Link><Link href="/goals">Update balances <span aria-hidden>↗</span></Link></div>
     </div>
   );
 }

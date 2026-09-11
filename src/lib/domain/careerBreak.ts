@@ -28,7 +28,7 @@ export function shiftMonths(s: string, months: number): string {
   const end = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months + 1, 0));
   return iso(new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), Math.min(d.getUTCDate(), end.getUTCDate()))));
 }
-function paydayAt(first: string, cadence: Cadence, index: number): string {
+export function paydayAt(first: string, cadence: Cadence, index: number): string {
   return cadence === 'MONTHLY' ? shiftMonths(first, index) : iso(new Date(date(first).getTime() + index * (cadence === 'WEEKLY' ? 7 : 14) * DAY));
 }
 

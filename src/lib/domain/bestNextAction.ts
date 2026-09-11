@@ -37,7 +37,7 @@ export function selectBestNextAction(input: {
       score: 900,
       headline: 'Prioritise debt',
       detail: 'Debt is currently recorded on the balance sheet — clearing it outranks building further buffers.',
-      href: '/health',
+      href: '/health#health-balances',
     });
   }
 
@@ -76,7 +76,7 @@ export function selectBestNextAction(input: {
       score: 500,
       headline: 'Review protection',
       detail: `${5 - input.protectionRecordedCount} of 5 protection items are not recorded yet.`,
-      href: '/health',
+      href: '/health#health-records',
     });
   }
 
@@ -85,7 +85,7 @@ export function selectBestNextAction(input: {
       score: 400,
       headline: 'Catch up on admin',
       detail: `${input.adminOverdueCount} admin ${input.adminOverdueCount === 1 ? 'item is' : 'items are'} overdue.`,
-      href: '/health',
+      href: '/health#health-records',
     });
   }
 

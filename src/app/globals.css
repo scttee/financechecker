@@ -114,3 +114,29 @@ main { min-width: 0; }
 ::selection { background: var(--accent-soft); color: var(--ink); }
 @media (max-width: 639px) { input, select, textarea { font-size: 16px !important; } }
 @media (forced-colors: active) { [aria-current="page"] { outline: 2px solid Highlight; } }
+
+/* Three calm destinations, with supporting tools kept off the dashboard. */
+.dashboard-stack { display: flex; flex-direction: column; gap: 1rem; max-width: 56rem; margin-inline: auto; }
+.dashboard-stack > header { margin-bottom: .5rem; }
+.duo-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; }
+.duo-tile { display: block; min-width: 0; padding: 1.4rem; border: 1px solid var(--line); border-radius: 28px; background: var(--card); transition: border-color .15s; }
+.duo-tile:hover { border-color: var(--accent); }
+.duo-tile-future { background: var(--accent-soft); }
+.outlook-card { background: linear-gradient(145deg, #242735, #172b29); color: #fff; border-color: transparent; border-radius: 30px; }
+.disclosure-panel { padding: 1rem 1.25rem; border: 1px solid var(--line); border-radius: 24px; background: var(--card); }
+.disclosure-panel > summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem; font-size: .9375rem; font-weight: 600; }
+.disclosure-panel > summary::after { content: '+'; font-size: 1.25rem; color: var(--muted); }
+.disclosure-panel[open] > summary::after { content: '−'; }
+.support-links { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; padding-inline: .25rem; }
+.support-links a { display: inline-flex; align-items: center; gap: .75rem; min-height: 44px; font-size: .875rem; color: var(--muted); }
+.support-links a:hover { color: var(--ink); }
+.primary-nav { max-width: 30rem; border: 1px solid var(--line); border-radius: 999px; padding: .3rem; background: var(--card); }
+@media (max-width:639px) {
+  .primary-nav { position: fixed; bottom: max(12px, env(safe-area-inset-bottom)); left: 16px; right: 16px; z-index: 30; margin-inline: auto; box-shadow: 0 8px 30px #00000018; }
+  .primary-nav a { padding-inline: .65rem; font-size: .8125rem; }
+  .duo-tile { padding: 1.1rem; border-radius: 24px; }
+  .duo-grid { gap: .75rem; }
+}
+
+.duo-tile { min-width: 0; container-type: inline-size; }
+.duo-figure { font-size: clamp(1.25rem, 15cqi, 1.875rem); }

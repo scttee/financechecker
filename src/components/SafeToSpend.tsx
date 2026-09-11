@@ -2,7 +2,7 @@ import type { SafeToSpendResult } from '@/lib/domain/safeToSpend';
 import { formatCents } from '@/lib/money';
 import { formatDayShort } from '@/lib/time';
 import { roleLabel } from '@/lib/domain/roles';
-import { Card, CardHeader, Money, Progress, Why } from '@/components/ui';
+import { Card, Money, Why } from '@/components/ui';
 
 /**
  * The safe-to-spend card.
@@ -36,58 +36,20 @@ export function SafeToSpendCard({
   timezone: string;
   spentTodayCents: number;
 }) {
-  const overToday = spentTodayCents > result.perDayCents;
-  const todayPct =
-    result.perDayCents > 0
-      ? (spentTodayCents / result.perDayCents) * 100
-      : spentTodayCents > 0
-        ? 100
-        : 0;
-
   return (
     <Card id="safe-to-spend" className="spend-hero">
-      <CardHeader
-        title="Your daily spending pace"
-        hint={
-          nextPaydayIsProjected
-            ? `Payday projected for ${formatDayShort(nextPayday, timezone)}`
-            : `Payday ${formatDayShort(nextPayday, timezone)}`
-        }
-      />
-
-      <p className="tabular mt-5 text-5xl font-semibold tracking-tight sm:text-6xl">{formatCents(result.perDayCents, { showCents: false })}</p>
-
-      <p className="mt-1.5 text-sm text-muted">
-        <span className="tabular font-medium text-ink">{formatCents(result.safeToSpendCents)}</span>{' '}
-        total over {daysToPayday} {daysToPayday === 1 ? 'day' : 'days'} to payday. Not an
-        allowance, just the rate this spreads to.
-      </p>
-
-      {spentTodayCents > 0 || result.perDayCents > 0 ? (
-        <div className="mt-3">
-          <div className="flex items-baseline justify-between gap-3 text-sm">
-            <span className="text-muted">Spent today</span>
-            <span className="tabular font-medium">
-              <Money cents={spentTodayCents} className={overToday ? 'text-attention' : undefined} />
-            </span>
-          </div>
-          <Progress
-            className="mt-1.5"
-            value={todayPct}
-            tone={overToday ? 'notice' : 'ontrack'}
-            label="Spent today against today's pace"
-          />
-        </div>
-      ) : null}
-
-      {result.safeToSpendCents === 0 ? (
-        <p className="mt-2 text-sm text-muted">
-          Nothing spare in the discretionary buckets. Rent, bills, groceries and health are
-          tracked separately. Check your pay cycle for their remaining budgets.
-        </p>
-      ) : null}
-
-      <Why label="How was this calculated?">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-muted">Your spending room</h2>
+        <span className="text-xs text-muted">{nextPaydayIsProjected ? 'Expected payday' : 'Payday'} {formatDayShort(nextPayday, timezone)}</span>
+      </div>
+      <div className="mt-7 grid grid-cols-[1.25fr_1fr] items-end gap-4">
+        <div><p className="text-sm text-muted">Available per day</p><p className="tabular mt-2 break-words text-5xl font-semibold tracking-tight sm:text-6xl">{formatCents(result.perDayCents, { showCents: false })}</p></div>
+        <div className="border-l border-line pl-4"><p className="text-sm text-muted">Spent today</p><p className="tabular mt-2 break-words text-2xl font-semibold tracking-tight sm:text-3xl"><Money cents={spentTodayCents} /></p></div>
+      </div>
+      <p className="mt-6 text-sm text-muted"><Money cents={result.safeToSpendCents} className="font-medium text-ink" /> left to spread over {daysToPayday} {daysToPayday === 1 ? 'day' : 'days'}, including today.</p>
+      {result.safeToSpendCents === 0 ? <p className="mt-2 text-sm text-muted">No discretionary spending room remains. Essential budgets are tracked separately in your pay cycle.</p> : null}
+      <Why label="How this works">
+        <p>The daily figure spreads your remaining discretionary money evenly until payday. It updates as spending lands; it is a pace, not a fixed daily allowance.</p>
         <ol className="space-y-2">
           {result.breakdown.map((line, index) => (
             <li key={`${line.label}-${index}`} className="flex flex-col gap-0.5">

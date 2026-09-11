@@ -3,9 +3,9 @@ import { isSignedIn } from '@/lib/auth/session';
 import { configStatus } from '@/lib/env';
 import { countOpenReviewItems } from '@/lib/services/reviewItems';
 import { Nav } from '@/components/Nav';
+import { ToolsMenu } from '@/components/ToolsMenu';
 import { SyncButton } from '@/components/SyncButton';
 import { Pill } from '@/components/ui';
-import { signOutAction } from '@/app/actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,25 +44,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             ) : null}
           </div>
 
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-2">
             <SyncButton />
-            <form action={signOutAction}>
-              <button
-                type="submit"
-                className="rounded-md px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-track hover:text-ink"
-              >
-                Sign out
-              </button>
-            </form>
+            <ToolsMenu reviewCount={reviewCount} />
+
           </div>
         </div>
-        <div className="mx-auto hidden max-w-wide px-5 pb-3 sm:block"><Nav reviewCount={reviewCount} /></div>
+        <div className="mx-auto hidden max-w-wide px-5 pb-3 sm:block"><Nav /></div>
       </header>
 
       <main id="main-content" tabIndex={-1} className="mx-auto max-w-wide px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-7 sm:px-6 sm:pb-12 sm:pt-10">{children}</main>
 
       <div className="sm:hidden">
-        <Nav reviewCount={reviewCount} />
+        <Nav />
       </div>
     </div>
   );

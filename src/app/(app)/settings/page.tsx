@@ -26,6 +26,7 @@ import {
   Why,
 } from '@/components/ui';
 import {
+  signOutAction,
   deleteMerchantRuleAction,
   deleteSalaryRuleAction,
   recalculateAction,
@@ -69,7 +70,7 @@ export default async function SettingsPage({
 
   return (
     <div className="space-y-5">
-      <PageTitle sub="Your financial system, shaped around the life you want.">Settings</PageTitle>
+      <div className="flex flex-wrap items-start justify-between gap-3"><PageTitle sub="Your financial system, shaped around the life you want.">Settings</PageTitle><form action={signOutAction}><Button variant="ghost" type="submit">Sign out</Button></form></div>
 
       <div className="flex gap-1 overflow-x-auto rounded-2xl border border-line bg-card p-1.5" role="navigation" aria-label="settings options">
         {TABS.map((t) => (

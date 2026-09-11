@@ -52,8 +52,8 @@ export function FinancialHealthCard({
 
   return (
     <Card>
-      <h2 className="mb-4 text-sm font-semibold text-muted">Financial health summary</h2>
-      <div className="flex items-center gap-4">
+      <h2 className="mb-4 text-sm font-semibold text-muted">Your health</h2>
+      <div className="flex flex-wrap items-center gap-4">
         <div className="relative shrink-0" style={{ width: 96, height: 96 }}>
           <svg aria-hidden="true" viewBox="0 0 100 100" className="h-full w-full -rotate-90">
             <circle cx="50" cy="50" r={radius} fill="none" stroke={track} strokeWidth="9" />
